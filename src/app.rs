@@ -10,7 +10,7 @@ use crate::ui::command_palette::{CommandPaletteState, PaletteAction};
 use crate::ui::input_editor::{InputAction, InputEditorState, compact_home_path};
 use crate::ui::theme::{MaterialTheme, apply_configured_font, paint_liquid_backdrop};
 use crate::ui::{render_notifications, render_pane_tree, render_search_bar, render_top_bar};
-use egui::{CentralPanel, Context, Event, Frame, Id, Key, Modifiers, ViewportCommand};
+use egui::{CentralPanel, Context, Event, Frame, Id, Key, Modifiers, Rect, ViewportCommand};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -169,20 +169,42 @@ pub struct MaterialTerminalApp {
     next_id: u64,
     last_applied_theme: Option<(String, f32, f32)>,
     last_applied_font_family: String,
+    custom_data_dir: Option<PathBuf>,
+    skip_user_rc: bool,
+    pub last_bar_rect: Rect,
+    pub last_workspace_rect: Rect,
 }
 
 impl MaterialTerminalApp {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        let ctx = cc.egui_ctx.clone();
+        Self::new_with_paths(
+            &cc.egui_ctx,
+            crate::config::default_config_path(),
+            None,
+            false,
+        )
+    }
+
+    /// Creates an isolated workspace instance (used by headless GUI + PTY integration tests).
+    pub fn new_with_paths(
+        ctx: &Context,
+        config_path: PathBuf,
+        custom_data_dir: Option<PathBuf>,
+        skip_user_rc: bool,
+    ) -> Self {
+        let ctx_clone = ctx.clone();
         let wake_cb: Arc<dyn Fn() + Send + Sync> = Arc::new(move || {
-            ctx.request_repaint();
+            ctx_clone.request_repaint();
         });
 
         let (config_manager, startup_err) =
-            ConfigManager::load_or_create_default(Some(wake_cb.clone()));
+            ConfigManager::load_or_create_at(config_path, Some(wake_cb.clone()));
         let config = config_manager.current();
 
-        let history = HistoryStore::open_default().ok();
+        let history = match &custom_data_dir {
+            Some(dir) => HistoryStore::open_at(&dir.join("history.sqlite")).ok(),
+            None => HistoryStore::open_default().ok(),
+        };
         let recent_history = history
             .as_ref()
             .map(|h| h.recent_unique(200))
@@ -209,11 +231,15 @@ impl MaterialTerminalApp {
             next_id: 1,
             last_applied_theme: None,
             last_applied_font_family: config.font.family.clone(),
+            custom_data_dir,
+            skip_user_rc,
+            last_bar_rect: Rect::NOTHING,
+            last_workspace_rect: Rect::NOTHING,
         };
 
-        apply_configured_font(&cc.egui_ctx, &config.font.family);
+        apply_configured_font(ctx, &config.font.family);
         let theme = MaterialTheme::from_config(&config);
-        theme.apply_to_egui(&cc.egui_ctx, &config);
+        theme.apply_to_egui(ctx, &config);
         app.last_applied_theme = Some((
             config.theme.clone(),
             config.window.opacity,
@@ -232,6 +258,10 @@ impl MaterialTerminalApp {
 
     fn spawn_pane(&mut self, initial_dir: PathBuf) -> Option<u64> {
         let pane_id = self.alloc_id();
+        let mut extra_env = Vec::new();
+        if self.skip_user_rc {
+            extra_env.push(("MATERIAL_SKIP_USER_RC".to_string(), "1".to_string()));
+        }
         let pty_cfg = PtySpawnConfig {
             program: self.config.shell.program.clone(),
             args: self.config.shell.args.clone(),
@@ -239,7 +269,8 @@ impl MaterialTerminalApp {
             cols: 100,
             rows: 32,
             enable_osc133_hooks: self.config.shell.enable_osc133_hooks,
-            ..PtySpawnConfig::default()
+            extra_env,
+            custom_data_dir: self.custom_data_dir.clone(),
         };
 
         match PtySession::spawn(pty_cfg, Some(self.wake_cb.clone())) {
@@ -770,16 +801,8 @@ impl MaterialTerminalApp {
             }
         }
     }
-}
 
-impl eframe::App for MaterialTerminalApp {
-    fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
-        MaterialTheme::from_config(&self.config)
-            .background
-            .to_normalized_gamma_f32()
-    }
-
-    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+    pub fn render_workspace(&mut self, ui: &mut egui::Ui) {
         let ctx = ui.ctx().clone();
         self.poll_background_events();
         self.handle_global_shortcuts(&ctx);
@@ -871,11 +894,12 @@ impl eframe::App for MaterialTerminalApp {
             ui.spacing_mut().item_spacing.y = 0.0;
             paint_liquid_backdrop(ui.painter(), ui.max_rect(), &theme);
 
-            render_top_bar(ui, self, &theme);
+            self.last_bar_rect = render_top_bar(ui, self, &theme);
             render_notifications(ui, self, &theme);
             render_search_bar(ui, self, &theme, focused_pane_id);
 
             let workspace_rect = ui.available_rect_before_wrap();
+            self.last_workspace_rect = workspace_rect;
             if workspace_rect.width() > 1.0 && workspace_rect.height() > 1.0 {
                 ui.allocate_rect(workspace_rect, egui::Sense::hover());
             }
@@ -903,6 +927,18 @@ impl eframe::App for MaterialTerminalApp {
         {
             self.apply_palette_action(action, &ctx);
         }
+    }
+}
+
+impl eframe::App for MaterialTerminalApp {
+    fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
+        MaterialTheme::from_config(&self.config)
+            .background
+            .to_normalized_gamma_f32()
+    }
+
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        self.render_workspace(ui);
     }
 }
 
