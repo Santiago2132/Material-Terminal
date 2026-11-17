@@ -4,8 +4,13 @@
 use crate::config::{AppConfig, Rgb, ThemePalette};
 use crate::terminal::{TermColor, TextStyle};
 use egui::epaint::Shadow;
-use egui::{Color32, Context, CornerRadius, FontId, Stroke, TextFormat, TextStyle as EguiTextStyle, Visuals};
+use egui::{
+    Color32, Context, CornerRadius, FontData, FontDefinitions, FontFamily, FontId, Stroke,
+    TextFormat, TextStyle as EguiTextStyle, Visuals,
+};
 use std::collections::BTreeMap;
+use std::path::PathBuf;
+use std::sync::Arc;
 
 /// Resolved `Color32` Material Design 3 tokens derived from `ThemePalette` + `opacity`.
 #[derive(Debug, Clone, Copy)]
@@ -178,4 +183,97 @@ pub fn rgb_opaque(rgb: Rgb) -> Color32 {
 
 pub fn rgb_alpha(rgb: Rgb, alpha: u8) -> Color32 {
     Color32::from_rgba_unmultiplied(rgb.r, rgb.g, rgb.b, alpha)
+}
+
+/// Attempts to load a system `.ttf`/`.otf` monospace font matching `family_name`
+/// into `FontFamily::Monospace` while retaining built-in fallbacks.
+pub fn apply_configured_font(ctx: &Context, family_name: &str) {
+    let mut defs = FontDefinitions::default();
+    if let Some(bytes) = find_system_font_bytes(family_name) {
+        let key = "user-configured-mono".to_string();
+        defs.font_data
+            .insert(key.clone(), Arc::new(FontData::from_owned(bytes)));
+        defs.families
+            .entry(FontFamily::Monospace)
+            .or_default()
+            .insert(0, key);
+    }
+    ctx.set_fonts(defs);
+}
+
+fn find_system_font_bytes(family_name: &str) -> Option<Vec<u8>> {
+    let normalized = family_name
+        .trim()
+        .to_ascii_lowercase()
+        .replace([' ', '-', '_'], "");
+    if normalized.is_empty() {
+        return None;
+    }
+
+    let mut search_dirs: Vec<PathBuf> = Vec::new();
+    if let Some(home) = dirs::home_dir() {
+        search_dirs.push(home.join("Library/Fonts"));
+        search_dirs.push(home.join(".local/share/fonts"));
+        search_dirs.push(home.join(".fonts"));
+    }
+    search_dirs.push(PathBuf::from("/Library/Fonts"));
+    search_dirs.push(PathBuf::from("/System/Library/Fonts"));
+    search_dirs.push(PathBuf::from("/System/Library/Fonts/Supplemental"));
+    search_dirs.push(PathBuf::from("/usr/share/fonts"));
+    search_dirs.push(PathBuf::from("/usr/local/share/fonts"));
+
+    let mut best_match: Option<(u8, PathBuf)> = None;
+    for dir in search_dirs {
+        collect_matching_font(&dir, &normalized, 0, &mut best_match);
+    }
+
+    let (_, path) = best_match?;
+    std::fs::read(path).ok()
+}
+
+fn collect_matching_font(
+    dir: &PathBuf,
+    normalized_target: &str,
+    depth: u8,
+    best: &mut Option<(u8, PathBuf)>,
+) {
+    if depth > 3 || !dir.is_dir() {
+        return;
+    }
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            collect_matching_font(&path, normalized_target, depth + 1, best);
+            continue;
+        }
+        let Some(ext) = path.extension().and_then(|e| e.to_str()) else {
+            continue;
+        };
+        if !matches!(ext.to_ascii_lowercase().as_str(), "ttf" | "otf") {
+            continue;
+        }
+        let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
+            continue;
+        };
+        let norm_stem = stem.to_ascii_lowercase().replace([' ', '-', '_'], "");
+        if !norm_stem.contains(normalized_target) {
+            continue;
+        }
+        // Prefer regular weight over bold/italic/condensed variants.
+        let score = if norm_stem == normalized_target
+            || norm_stem == format!("{normalized_target}regular")
+        {
+            3
+        } else if !norm_stem.contains("italic") && !norm_stem.contains("bold") {
+            2
+        } else {
+            1
+        };
+        if best.as_ref().is_none_or(|(best_s, _)| score > *best_s) {
+            *best = Some((score, path));
+        }
+    }
 }

@@ -437,7 +437,7 @@ impl AppConfig {
 /// Events emitted by the hot-reload configuration watcher to the UI.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ConfigEvent {
-    Reloaded(AppConfig),
+    Reloaded(Box<AppConfig>),
     ReloadError(String),
 }
 
@@ -593,7 +593,7 @@ impl ConfigManager {
                     };
                     if *guard != new_cfg {
                         *guard = new_cfg.clone();
-                        let _ = tx.send(ConfigEvent::Reloaded(new_cfg));
+                        let _ = tx.send(ConfigEvent::Reloaded(Box::new(new_cfg)));
                         if let Some(cb) = &wake_cb {
                             cb();
                         }
@@ -700,8 +700,10 @@ mod tests {
 
     #[test]
     fn validation_rejects_bad_ranges_and_unknown_theme() {
-        let mut cfg = AppConfig::default();
-        cfg.theme = "nonexistent-theme".to_string();
+        let cfg = AppConfig {
+            theme: "nonexistent-theme".to_string(),
+            ..Default::default()
+        };
         assert!(cfg.validate().is_err());
 
         let mut cfg = AppConfig::default();
@@ -745,8 +747,10 @@ mod tests {
 
         // 2. Write valid TOML -> should emit Reloaded with Dracula and update current().
         std::thread::sleep(Duration::from_millis(100));
-        let mut updated = AppConfig::default();
-        updated.theme = "dracula".to_string();
+        let mut updated = AppConfig {
+            theme: "dracula".to_string(),
+            ..Default::default()
+        };
         updated.font.size = 15.0;
         fs::write(&cfg_path, updated.to_commented_toml().unwrap()).unwrap();
 
