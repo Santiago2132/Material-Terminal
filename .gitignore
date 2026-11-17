@@ -1,0 +1,32 @@
+# Rust / Cargo build outputs
+/target
+**/*.rs.bk
+*.pdb
+
+# macOS / OS artifacts
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+
+# Databases & logs
+*.sqlite
+*.sqlite3
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite-journal
+*.db
+*.log
+
+# IDE / Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Local environment / scratch
+.env
+.env.local
+scratch/
