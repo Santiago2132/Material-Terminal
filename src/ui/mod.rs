@@ -20,27 +20,51 @@ use egui::{
 };
 
 /// Integrated 46px Liquid Glass titlebar with macOS traffic-light margin, tabs, and toolbar pills.
-pub fn render_top_bar(ui: &mut Ui, app: &mut MaterialTerminalApp, theme: &MaterialTheme) {
-    let bar_frame = Frame::new()
-        .fill(theme.glass_titlebar)
-        .inner_margin(Margin {
-            left: if cfg!(target_os = "macos") { 80 } else { 14 },
-            right: 14,
-            top: 8,
-            bottom: 8,
-        });
+pub fn render_top_bar(ui: &mut Ui, app: &mut MaterialTerminalApp, theme: &MaterialTheme) -> Rect {
+    let full = ui.available_rect_before_wrap();
+    let bar_rect = Rect::from_min_size(full.min, Vec2::new(full.width(), 46.0));
 
-    let bar_resp = bar_frame.show(ui, |ui| {
-        ui.set_min_width(ui.available_width());
-        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+    ui.painter()
+        .rect_filled(bar_rect, CornerRadius::ZERO, theme.glass_titlebar);
+
+    let left_pad = if cfg!(target_os = "macos") {
+        80.0
+    } else {
+        14.0
+    };
+    let content_rect = Rect::from_min_max(
+        Pos2::new(bar_rect.left() + left_pad, bar_rect.top() + 6.0),
+        Pos2::new(
+            (bar_rect.right() - 14.0).max(bar_rect.left() + left_pad + 40.0),
+            bar_rect.bottom() - 6.0,
+        ),
+    );
+
+    let palette_label = if cfg!(target_os = "macos") {
+        "Cmd+K"
+    } else {
+        "Ctrl+Shift+P"
+    };
+
+    ui.scope_builder(
+        UiBuilder::new()
+            .id_salt("material_top_bar_scope")
+            .max_rect(content_rect)
+            .layout(Layout::right_to_left(Align::Center)),
+        |ui| {
+            ui.set_clip_rect(bar_rect);
             ui.spacing_mut().item_spacing.x = 8.0;
 
             if ui
                 .add(
-                    Button::new(RichText::new("Cmd+K").small().color(theme.foreground_muted))
-                        .fill(Color32::from_rgba_unmultiplied(255, 255, 255, 13))
-                        .stroke(Stroke::new(1.0, theme.glass_border_subtle))
-                        .corner_radius(CornerRadius::same(8)),
+                    Button::new(
+                        RichText::new(palette_label)
+                            .small()
+                            .color(theme.foreground_muted),
+                    )
+                    .fill(Color32::from_rgba_unmultiplied(255, 255, 255, 13))
+                    .stroke(Stroke::new(1.0, theme.glass_border_subtle))
+                    .corner_radius(CornerRadius::same(8)),
                 )
                 .on_hover_text("Open Command Palette (Cmd+K / Ctrl+Shift+P)")
                 .clicked()
@@ -99,7 +123,7 @@ pub fn render_top_bar(ui: &mut Ui, app: &mut MaterialTerminalApp, theme: &Materi
                     .stroke(Stroke::new(1.0, theme.glass_border_subtle))
                     .corner_radius(CornerRadius::same(8)),
                 )
-                .on_hover_text("Split Horizontally Top/Bottom (Cmd+Shift+D)")
+                .on_hover_text("Split Horizontally Top/Bottom")
                 .clicked()
             {
                 app.split_focused_pane(SplitAxis::Horizontal);
@@ -116,7 +140,7 @@ pub fn render_top_bar(ui: &mut Ui, app: &mut MaterialTerminalApp, theme: &Materi
                     .stroke(Stroke::new(1.0, theme.glass_border_subtle))
                     .corner_radius(CornerRadius::same(8)),
                 )
-                .on_hover_text("Split Vertically Side-by-Side (Cmd+D)")
+                .on_hover_text("Split Vertically Side-by-Side")
                 .clicked()
             {
                 app.split_focused_pane(SplitAxis::Vertical);
@@ -124,10 +148,17 @@ pub fn render_top_bar(ui: &mut Ui, app: &mut MaterialTerminalApp, theme: &Materi
 
             // Remaining left space: scrollable tabs + '+' button
             let tabs_avail_w = ui.available_width().max(80.0);
-            ui.allocate_ui_with_layout(
-                Vec2::new(tabs_avail_w, 30.0),
-                Layout::left_to_right(Align::Center),
+            let tabs_rect = Rect::from_min_size(
+                Pos2::new(content_rect.left(), content_rect.top()),
+                Vec2::new(tabs_avail_w, content_rect.height()),
+            );
+            ui.scope_builder(
+                UiBuilder::new()
+                    .id_salt("material_top_bar_tabs")
+                    .max_rect(tabs_rect)
+                    .layout(Layout::left_to_right(Align::Center)),
                 |ui| {
+                    ui.set_clip_rect(tabs_rect);
                     ScrollArea::horizontal()
                         .id_salt(Id::NULL.with("top_tabs_scroll"))
                         .max_width(tabs_avail_w)
@@ -208,7 +239,7 @@ pub fn render_top_bar(ui: &mut Ui, app: &mut MaterialTerminalApp, theme: &Materi
                                                             .corner_radius(CornerRadius::same(5))
                                                             .min_size(Vec2::new(20.0, 20.0)),
                                                         )
-                                                        .on_hover_text("Close tab (Cmd+W)")
+                                                        .on_hover_text("Close tab")
                                                         .clicked()
                                                 {
                                                     close_tab_idx = Some(idx);
@@ -236,7 +267,7 @@ pub fn render_top_bar(ui: &mut Ui, app: &mut MaterialTerminalApp, theme: &Materi
                                         .corner_radius(CornerRadius::same(8))
                                         .min_size(Vec2::new(28.0, 26.0)),
                                     )
-                                    .on_hover_text("New Tab (Cmd+T)")
+                                    .on_hover_text("New Tab")
                                     .clicked()
                                 {
                                     app.new_tab();
@@ -253,22 +284,25 @@ pub fn render_top_bar(ui: &mut Ui, app: &mut MaterialTerminalApp, theme: &Materi
                         });
                 },
             );
-        });
-    });
+        },
+    );
 
     // Enable native window dragging from empty titlebar space without stealing button clicks.
-    let rect = bar_resp.response.rect;
     if !ui.ctx().egui_is_using_pointer() {
         let drag_press = ui.input(|i| {
             i.pointer.primary_pressed()
-                && i.pointer.press_origin().is_some_and(|p| rect.contains(p))
+                && i.pointer
+                    .press_origin()
+                    .is_some_and(|p| bar_rect.contains(p))
         });
         if drag_press {
             ui.ctx().send_viewport_cmd(ViewportCommand::StartDrag);
         } else if ui.input(|i| {
             i.pointer
                 .button_double_clicked(egui::PointerButton::Primary)
-                && i.pointer.interact_pos().is_some_and(|p| rect.contains(p))
+                && i.pointer
+                    .interact_pos()
+                    .is_some_and(|p| bar_rect.contains(p))
         }) {
             let currently_max = ui.ctx().input(|i| i.viewport().maximized.unwrap_or(false));
             ui.ctx()
@@ -279,11 +313,13 @@ pub fn render_top_bar(ui: &mut Ui, app: &mut MaterialTerminalApp, theme: &Materi
     // Crisp bottom glass hairline separator
     ui.painter().line_segment(
         [
-            Pos2::new(rect.left(), rect.bottom()),
-            Pos2::new(rect.right(), rect.bottom()),
+            Pos2::new(bar_rect.left(), bar_rect.bottom()),
+            Pos2::new(bar_rect.right(), bar_rect.bottom()),
         ],
         Stroke::new(1.0, theme.glass_border_subtle),
     );
+    ui.allocate_rect(bar_rect, Sense::hover());
+    bar_rect
 }
 
 /// Non-intrusive notification bar for config hot-reload errors or confirmation toasts.

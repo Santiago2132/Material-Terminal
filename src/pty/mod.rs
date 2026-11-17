@@ -56,7 +56,7 @@ impl Default for PtySpawnConfig {
     }
 }
 
-/// Resolves the user's preferred shell from `program` override or `$SHELL`.
+/// Resolves the user's preferred shell from `program` override, `$SHELL`, or OS defaults.
 pub fn resolve_shell_program(override_program: Option<&str>) -> String {
     if let Some(prog) = override_program
         && !prog.trim().is_empty()
@@ -68,12 +68,24 @@ pub fn resolve_shell_program(override_program: Option<&str>) -> String {
     {
         return env_shell;
     }
-    if PathBuf::from("/bin/zsh").exists() {
-        "/bin/zsh".to_string()
-    } else if PathBuf::from("/bin/bash").exists() {
-        "/bin/bash".to_string()
-    } else {
-        "/bin/sh".to_string()
+    #[cfg(windows)]
+    {
+        if let Ok(comspec) = std::env::var("COMSPEC")
+            && !comspec.trim().is_empty()
+        {
+            return comspec;
+        }
+        return "powershell.exe".to_string();
+    }
+    #[cfg(not(windows))]
+    {
+        if PathBuf::from("/bin/zsh").exists() {
+            "/bin/zsh".to_string()
+        } else if PathBuf::from("/bin/bash").exists() {
+            "/bin/bash".to_string()
+        } else {
+            "/bin/sh".to_string()
+        }
     }
 }
 
