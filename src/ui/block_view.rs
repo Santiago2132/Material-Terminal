@@ -258,7 +258,8 @@ pub fn render_block_card(
     });
 
     let rect = card_resp.response.rect;
-    ui.data_mut(|d| d.insert_temp(hover_id, ui.rect_contains_pointer(rect)));
+    let is_hovered = ui.rect_contains_pointer(rect);
+    ui.data_mut(|d| d.insert_temp(hover_id, is_hovered));
 
     // Specular 1px top highlight inside glass card
     paint_specular_highlight(

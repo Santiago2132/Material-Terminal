@@ -429,15 +429,31 @@ pub struct KeybindingsConfig {
 
 impl Default for KeybindingsConfig {
     fn default() -> Self {
-        Self {
-            new_tab: "Cmd+T".to_string(),
-            close_tab: "Cmd+W".to_string(),
-            split_vertical: "Cmd+D".to_string(),
-            split_horizontal: "Cmd+Shift+D".to_string(),
-            command_palette: "Cmd+K".to_string(),
-            search: "Cmd+F".to_string(),
-            clear_blocks: "Cmd+L".to_string(),
-            open_config: "Cmd+,".to_string(),
+        #[cfg(target_os = "macos")]
+        {
+            Self {
+                new_tab: "Cmd+T".to_string(),
+                close_tab: "Cmd+W".to_string(),
+                split_vertical: "Cmd+D".to_string(),
+                split_horizontal: "Cmd+Shift+D".to_string(),
+                command_palette: "Cmd+K".to_string(),
+                search: "Cmd+F".to_string(),
+                clear_blocks: "Cmd+L".to_string(),
+                open_config: "Cmd+,".to_string(),
+            }
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            Self {
+                new_tab: "Ctrl+Shift+T".to_string(),
+                close_tab: "Ctrl+Shift+W".to_string(),
+                split_vertical: "Ctrl+Shift+D".to_string(),
+                split_horizontal: "Ctrl+Shift+E".to_string(),
+                command_palette: "Ctrl+Shift+P".to_string(),
+                search: "Ctrl+Shift+F".to_string(),
+                clear_blocks: "Ctrl+Shift+L".to_string(),
+                open_config: "Ctrl+,".to_string(),
+            }
         }
     }
 }
