@@ -1,4 +1,4 @@
-//! Workspace UI layout: minimalist top tab bar, recursive draggable split panes,
+//! Workspace UI layout: clean top tab bar, deterministic non-overlapping split panes,
 //! Block Mode scroll view, Alternate Screen GPU grid, and floating search overlay.
 
 pub mod block_view;
@@ -14,167 +14,204 @@ use crate::ui::input_editor::{InputAction, compact_home_path};
 use crate::ui::theme::{MaterialTheme, rgb_opaque};
 use egui::text::LayoutJob;
 use egui::{
-    Align, Color32, CornerRadius, CursorIcon, Event, FontId, Frame, Id, Key, Layout, Margin,
-    Modifiers, Pos2, Rect, RichText, ScrollArea, Sense, Stroke, TextEdit, Ui, Vec2,
+    Align, Button, Color32, CornerRadius, CursorIcon, Event, FontId, Frame, Id, Key, Layout,
+    Margin, Modifiers, Pos2, Rect, RichText, ScrollArea, Sense, Stroke, TextEdit, Ui, UiBuilder,
+    Vec2,
 };
 
-/// Minimalist top tab strip with active theme chip and Command Palette / Search buttons.
+/// Clean top tab strip with readable tabs, dedicated close buttons, and workspace controls.
 pub fn render_top_bar(ui: &mut Ui, app: &mut MaterialTerminalApp, theme: &MaterialTheme) {
     let bar_frame = Frame::new()
         .fill(theme.surface)
-        .stroke(Stroke::new(1.0, theme.border))
-        .inner_margin(Margin::symmetric(10, 6));
+        .inner_margin(Margin::symmetric(12, 8));
 
-    bar_frame.show(ui, |ui| {
-        ui.horizontal(|ui| {
+    let bar_resp = bar_frame.show(ui, |ui| {
+        ui.set_min_width(ui.available_width());
+        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
             ui.spacing_mut().item_spacing.x = 6.0;
 
-            let mut switch_to: Option<usize> = None;
-            let mut close_tab_idx: Option<usize> = None;
-
-            for (idx, tab) in app.tabs.iter().enumerate() {
-                let is_active = idx == app.active_tab;
-                let title = app.tab_title(tab);
-
-                let fill = if is_active {
-                    theme.surface_elevated
-                } else {
-                    Color32::TRANSPARENT
-                };
-                let stroke = if is_active {
-                    Stroke::new(1.0, theme.border_focused)
-                } else {
-                    Stroke::new(1.0, Color32::TRANSPARENT)
-                };
-
-                let pill = Frame::new()
-                    .fill(fill)
-                    .stroke(stroke)
-                    .corner_radius(CornerRadius::same(8))
-                    .inner_margin(Margin::symmetric(10, 4));
-
-                let tab_id = Id::NULL.with(("tab_pill", tab.id));
-                let resp = pill
-                    .show(ui, |ui| {
-                        ui.horizontal(|ui| {
-                            let label_color = if is_active {
-                                theme.foreground
-                            } else {
-                                theme.foreground_muted
-                            };
-                            let lbl = ui.add(
-                                egui::Label::new(
-                                    RichText::new(title).small().strong().color(label_color),
-                                )
-                                .sense(Sense::click()),
-                            );
-                            if lbl.clicked() {
-                                switch_to = Some(idx);
-                            }
-
-                            if app.tabs.len() > 1
-                                && ui
-                                    .add(
-                                        egui::Button::new(
-                                            RichText::new("×")
-                                                .small()
-                                                .color(theme.foreground_subtle),
-                                        )
-                                        .frame(false),
-                                    )
-                                    .on_hover_text("Close tab (Cmd+W)")
-                                    .clicked()
-                            {
-                                close_tab_idx = Some(idx);
-                            }
-                        });
-                    })
-                    .response
-                    .interact(Sense::click());
-
-                if resp.clicked() && switch_to.is_none() {
-                    switch_to = Some(idx);
-                }
-                let _ = tab_id;
+            let theme_label = app.config.resolved_theme().display_name();
+            if ui
+                .add(
+                    Button::new(RichText::new(theme_label).strong().color(theme.accent))
+                        .fill(theme.accent_soft)
+                        .stroke(Stroke::new(1.0, theme.border_focused))
+                        .corner_radius(CornerRadius::same(8)),
+                )
+                .on_hover_text("Switch Theme or Open Commands (Cmd+K)")
+                .clicked()
+            {
+                app.palette.toggle();
             }
 
             if ui
-                .small_button(RichText::new("+").strong().color(theme.accent))
-                .on_hover_text("New Tab (Cmd+T)")
+                .add(
+                    Button::new(RichText::new("Commands").color(theme.foreground))
+                        .fill(theme.surface_elevated)
+                        .stroke(Stroke::new(1.0, theme.border))
+                        .corner_radius(CornerRadius::same(8)),
+                )
+                .on_hover_text("Command Palette (Cmd+K / Ctrl+Shift+P)")
                 .clicked()
             {
-                app.new_tab();
+                app.palette.toggle();
             }
 
-            if let Some(idx) = switch_to {
-                app.active_tab = idx;
-                app.focus_active_pane_editor();
+            if ui
+                .add(
+                    Button::new(RichText::new("Find").color(theme.foreground))
+                        .fill(theme.surface_elevated)
+                        .stroke(Stroke::new(1.0, theme.border))
+                        .corner_radius(CornerRadius::same(8)),
+                )
+                .on_hover_text("Search Blocks (Cmd+F)")
+                .clicked()
+            {
+                app.toggle_search();
             }
-            if let Some(idx) = close_tab_idx {
-                app.close_tab_at(idx);
+
+            if ui
+                .add(
+                    Button::new(RichText::new("Split -").color(theme.foreground))
+                        .fill(theme.surface_elevated)
+                        .stroke(Stroke::new(1.0, theme.border))
+                        .corner_radius(CornerRadius::same(8)),
+                )
+                .on_hover_text("Split Horizontally Top/Bottom (Cmd+Shift+D)")
+                .clicked()
+            {
+                app.split_focused_pane(SplitAxis::Horizontal);
             }
 
-            // Right side: Split quick actions, Search, Command Palette, Active Theme pill
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                let theme_label = app.config.resolved_theme().display_name();
-                if ui
-                    .add(
-                        egui::Button::new(
-                            RichText::new(format!("Theme: {theme_label}"))
-                                .small()
-                                .color(theme.accent),
-                        )
-                        .fill(theme.accent_soft)
-                        .corner_radius(CornerRadius::same(7)),
-                    )
-                    .on_hover_text("Switch theme or open Command Palette (Cmd+K)")
-                    .clicked()
-                {
-                    app.palette.toggle();
-                }
+            if ui
+                .add(
+                    Button::new(RichText::new("Split |").color(theme.foreground))
+                        .fill(theme.surface_elevated)
+                        .stroke(Stroke::new(1.0, theme.border))
+                        .corner_radius(CornerRadius::same(8)),
+                )
+                .on_hover_text("Split Vertically Side-by-Side (Cmd+D)")
+                .clicked()
+            {
+                app.split_focused_pane(SplitAxis::Vertical);
+            }
 
-                if ui
-                    .small_button(RichText::new("Cmd+K").small().color(theme.foreground_muted))
-                    .on_hover_text("Open Command Palette (Cmd+K / Ctrl+Shift+P)")
-                    .clicked()
-                {
-                    app.palette.toggle();
-                }
+            // Remaining space on the left hosts scrollable tabs + '+ Tab' button cleanly.
+            let tabs_avail_w = ui.available_width().max(80.0);
+            ui.allocate_ui_with_layout(
+                Vec2::new(tabs_avail_w, 30.0),
+                Layout::left_to_right(Align::Center),
+                |ui| {
+                    ScrollArea::horizontal()
+                        .id_salt(Id::NULL.with("top_tabs_scroll"))
+                        .max_width(tabs_avail_w)
+                        .show(ui, |ui| {
+                            ui.horizontal(|ui| {
+                                ui.spacing_mut().item_spacing.x = 6.0;
 
-                if ui
-                    .small_button(RichText::new("Find").small().color(theme.foreground_muted))
-                    .on_hover_text("Search blocks (Cmd+F)")
-                    .clicked()
-                {
-                    app.toggle_search();
-                }
+                                let mut switch_to: Option<usize> = None;
+                                let mut close_tab_idx: Option<usize> = None;
 
-                if ui
-                    .small_button(
-                        RichText::new("Split ⊟")
-                            .small()
-                            .color(theme.foreground_muted),
-                    )
-                    .on_hover_text("Split Horizontally (Cmd+Shift+D)")
-                    .clicked()
-                {
-                    app.split_focused_pane(SplitAxis::Horizontal);
-                }
+                                for (idx, tab) in app.tabs.iter().enumerate() {
+                                    let is_active = idx == app.active_tab;
+                                    let title = app.tab_title(tab);
 
-                if ui
-                    .small_button(
-                        RichText::new("Split ⊞")
-                            .small()
-                            .color(theme.foreground_muted),
-                    )
-                    .on_hover_text("Split Vertically (Cmd+D)")
-                    .clicked()
-                {
-                    app.split_focused_pane(SplitAxis::Vertical);
-                }
-            });
+                                    let fill = if is_active {
+                                        theme.surface_elevated
+                                    } else {
+                                        theme.surface
+                                    };
+                                    let stroke = if is_active {
+                                        Stroke::new(1.2, theme.border_focused)
+                                    } else {
+                                        Stroke::new(1.0, theme.border)
+                                    };
+
+                                    Frame::new()
+                                        .fill(fill)
+                                        .stroke(stroke)
+                                        .corner_radius(CornerRadius::same(8))
+                                        .inner_margin(Margin::symmetric(8, 2))
+                                        .show(ui, |ui| {
+                                            ui.horizontal(|ui| {
+                                                ui.spacing_mut().item_spacing.x = 6.0;
+                                                let label_color = if is_active {
+                                                    theme.foreground
+                                                } else {
+                                                    theme.foreground_muted
+                                                };
+                                                if ui
+                                                    .add(
+                                                        Button::new(
+                                                            RichText::new(title)
+                                                                .strong()
+                                                                .color(label_color),
+                                                        )
+                                                        .frame(false),
+                                                    )
+                                                    .clicked()
+                                                {
+                                                    switch_to = Some(idx);
+                                                }
+
+                                                if app.tabs.len() > 1
+                                                    && ui
+                                                        .add(
+                                                            Button::new(
+                                                                RichText::new("x")
+                                                                    .color(theme.foreground_muted),
+                                                            )
+                                                            .fill(theme.surface_highest)
+                                                            .corner_radius(CornerRadius::same(5))
+                                                            .min_size(Vec2::new(22.0, 22.0)),
+                                                        )
+                                                        .on_hover_text("Close tab (Cmd+W)")
+                                                        .clicked()
+                                                {
+                                                    close_tab_idx = Some(idx);
+                                                }
+                                            });
+                                        });
+                                }
+
+                                if ui
+                                    .add(
+                                        Button::new(
+                                            RichText::new("+ Tab").strong().color(theme.accent),
+                                        )
+                                        .fill(theme.surface_elevated)
+                                        .stroke(Stroke::new(1.0, theme.border))
+                                        .corner_radius(CornerRadius::same(8)),
+                                    )
+                                    .on_hover_text("New Tab (Cmd+T)")
+                                    .clicked()
+                                {
+                                    app.new_tab();
+                                }
+
+                                if let Some(idx) = switch_to {
+                                    app.active_tab = idx;
+                                    app.focus_active_pane_editor();
+                                }
+                                if let Some(idx) = close_tab_idx {
+                                    app.close_tab_at(idx);
+                                }
+                            });
+                        });
+                },
+            );
         });
     });
+
+    // Draw clean bottom hairline separator across the top bar (no edge-clipping box stroke).
+    let rect = bar_resp.response.rect;
+    ui.painter().line_segment(
+        [
+            Pos2::new(rect.left(), rect.bottom()),
+            Pos2::new(rect.right(), rect.bottom()),
+        ],
+        Stroke::new(1.0, theme.border),
+    );
 }
 
 /// Non-intrusive notification bar for config hot-reload errors or confirmation toasts.
@@ -191,16 +228,16 @@ pub fn render_notifications(ui: &mut Ui, app: &mut MaterialTerminalApp, theme: &
             .corner_radius(CornerRadius::same(8))
             .inner_margin(Margin::symmetric(12, 6))
             .show(ui, |ui| {
+                ui.set_min_width(ui.available_width());
                 ui.horizontal(|ui| {
                     ui.label(
                         RichText::new(format!(
                             "Config Error (previous valid config active): {err}"
                         ))
-                        .small()
                         .color(theme.error),
                     );
                     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                        if ui.small_button("Dismiss").clicked() {
+                        if ui.button("Dismiss").clicked() {
                             app.config_error = None;
                         }
                     });
@@ -217,17 +254,18 @@ pub fn render_notifications(ui: &mut Ui, app: &mut MaterialTerminalApp, theme: &
                 .fill(theme.surface_highest)
                 .stroke(Stroke::new(1.0, theme.border_focused))
                 .corner_radius(CornerRadius::same(8))
-                .inner_margin(Margin::symmetric(12, 5))
+                .inner_margin(Margin::symmetric(12, 6))
                 .show(ui, |ui| {
+                    ui.set_min_width(ui.available_width());
                     ui.horizontal(|ui| {
-                        ui.label(RichText::new(msg_text).small().color(theme.foreground));
+                        ui.label(RichText::new(msg_text).color(theme.foreground));
                     });
                 });
         }
     }
 }
 
-/// Inline floating search bar (`Cmd+F`) for finding text across CommandBlocks.
+/// Inline search bar (`Cmd+F`) for finding text across CommandBlocks.
 pub fn render_search_bar(
     ui: &mut Ui,
     app: &mut MaterialTerminalApp,
@@ -259,16 +297,17 @@ pub fn render_search_bar(
     Frame::new()
         .fill(theme.surface_elevated)
         .stroke(Stroke::new(1.0, theme.border_focused))
-        .corner_radius(CornerRadius::same(10))
-        .inner_margin(Margin::symmetric(10, 6))
+        .corner_radius(CornerRadius::same(8))
+        .inner_margin(Margin::symmetric(12, 6))
         .show(ui, |ui| {
+            ui.set_min_width(ui.available_width());
             ui.horizontal(|ui| {
-                ui.label(RichText::new("Find:").small().color(theme.accent));
+                ui.label(RichText::new("Find:").strong().color(theme.accent));
                 let search_id = Id::NULL.with("workspace_search_input");
                 let resp = ui.add(
                     TextEdit::singleline(&mut app.search.query)
                         .id(search_id)
-                        .desired_width(240.0)
+                        .desired_width(260.0)
                         .hint_text("Search commands & output..."),
                 );
                 if app.search.just_opened {
@@ -287,16 +326,12 @@ pub fn render_search_bar(
                 } else {
                     format!("{} / {}", app.search.active_match_idx + 1, match_ids.len())
                 };
-                ui.label(
-                    RichText::new(count_label)
-                        .small()
-                        .color(theme.foreground_muted),
-                );
+                ui.label(RichText::new(count_label).color(theme.foreground_muted));
 
                 let enter_next = resp.has_focus()
                     && ui.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Enter));
                 if !match_ids.is_empty()
-                    && (ui.small_button("Prev").clicked()
+                    && (ui.button("Prev").clicked()
                         || (resp.has_focus()
                             && ui.input_mut(|i| i.consume_key(Modifiers::SHIFT, Key::Enter))))
                 {
@@ -307,14 +342,14 @@ pub fn render_search_bar(
                     };
                     app.search.scroll_to_active = true;
                 }
-                if !match_ids.is_empty() && (ui.small_button("Next").clicked() || enter_next) {
+                if !match_ids.is_empty() && (ui.button("Next").clicked() || enter_next) {
                     app.search.active_match_idx =
                         (app.search.active_match_idx + 1) % match_ids.len();
                     app.search.scroll_to_active = true;
                 }
 
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    if ui.small_button("Close").clicked() {
+                    if ui.button("Close").clicked() {
                         app.search.open = false;
                         app.focus_active_pane_editor();
                     }
@@ -338,7 +373,7 @@ fn matching_block_ids(blocks: &[CommandBlock], query: &str) -> Vec<u64> {
         .collect()
 }
 
-/// Recursively renders the split-pane binary tree inside the workspace.
+/// Recursively renders the split-pane binary tree with strictly disjoint clipped rects.
 pub fn render_pane_tree(
     ui: &mut Ui,
     node: &mut PaneNode,
@@ -348,18 +383,30 @@ pub fn render_pane_tree(
     focused_pane_id: u64,
     active_search_block: Option<u64>,
 ) {
+    if rect.width() < 20.0 || rect.height() < 20.0 {
+        return;
+    }
+
     match node {
         PaneNode::Leaf(pane_id) => {
             let pid = *pane_id;
-            let mut child_ui = ui.new_child(egui::UiBuilder::new().max_rect(rect));
-            render_single_pane(
-                &mut child_ui,
-                pid,
-                rect,
-                app,
-                theme,
-                pid == focused_pane_id,
-                active_search_block,
+            ui.scope_builder(
+                UiBuilder::new()
+                    .id_salt(("pane_leaf", pid))
+                    .max_rect(rect)
+                    .layout(Layout::top_down(Align::Min)),
+                |ui| {
+                    ui.set_clip_rect(rect);
+                    render_single_pane(
+                        ui,
+                        pid,
+                        rect,
+                        app,
+                        theme,
+                        pid == focused_pane_id,
+                        active_search_block,
+                    );
+                },
             );
         }
         PaneNode::Split {
@@ -368,35 +415,9 @@ pub fn render_pane_tree(
             first,
             second,
         } => {
-            let gap = 6.0;
-            let (first_rect, handle_rect, second_rect) = match axis {
-                SplitAxis::Vertical => {
-                    let usable_w = (rect.width() - gap).max(40.0);
-                    let first_w = (usable_w * *ratio).clamp(80.0, usable_w - 80.0);
-                    let r1 = Rect::from_min_max(
-                        rect.min,
-                        Pos2::new(rect.left() + first_w, rect.bottom()),
-                    );
-                    let handle = Rect::from_min_max(
-                        Pos2::new(r1.right(), rect.top()),
-                        Pos2::new(r1.right() + gap, rect.bottom()),
-                    );
-                    let r2 = Rect::from_min_max(Pos2::new(handle.right(), rect.top()), rect.max);
-                    (r1, handle, r2)
-                }
-                SplitAxis::Horizontal => {
-                    let usable_h = (rect.height() - gap).max(40.0);
-                    let first_h = (usable_h * *ratio).clamp(80.0, usable_h - 80.0);
-                    let r1 =
-                        Rect::from_min_max(rect.min, Pos2::new(rect.right(), rect.top() + first_h));
-                    let handle = Rect::from_min_max(
-                        Pos2::new(rect.left(), r1.bottom()),
-                        Pos2::new(rect.right(), r1.bottom() + gap),
-                    );
-                    let r2 = Rect::from_min_max(Pos2::new(rect.left(), handle.bottom()), rect.max);
-                    (r1, handle, r2)
-                }
-            };
+            let gap = 8.0;
+            let (first_rect, handle_rect, second_rect) =
+                compute_split_rects(rect, *axis, *ratio, gap);
 
             render_pane_tree(
                 ui,
@@ -413,6 +434,10 @@ pub fn render_pane_tree(
                 "split_handle",
                 first_rect.min.x as i32,
                 first_rect.min.y as i32,
+                match axis {
+                    SplitAxis::Vertical => 1u8,
+                    SplitAxis::Horizontal => 2u8,
+                },
             ));
             let resp = ui.interact(handle_rect, handle_id, Sense::drag());
             if resp.hovered() || resp.dragged() {
@@ -427,27 +452,30 @@ pub fn render_pane_tree(
                 match axis {
                     SplitAxis::Vertical => {
                         let usable_w = (rect.width() - gap).max(1.0);
-                        *ratio = (*ratio + delta.x / usable_w).clamp(0.15, 0.85);
+                        *ratio = (*ratio + delta.x / usable_w).clamp(0.18, 0.82);
                     }
                     SplitAxis::Horizontal => {
                         let usable_h = (rect.height() - gap).max(1.0);
-                        *ratio = (*ratio + delta.y / usable_h).clamp(0.15, 0.85);
+                        *ratio = (*ratio + delta.y / usable_h).clamp(0.18, 0.82);
                     }
                 }
             }
+
             let divider_color = if resp.hovered() || resp.dragged() {
                 theme.border_focused
             } else {
                 theme.border
             };
+            ui.painter()
+                .rect_filled(handle_rect, CornerRadius::ZERO, theme.surface);
             let line_rect = match axis {
                 SplitAxis::Vertical => Rect::from_center_size(
                     handle_rect.center(),
-                    Vec2::new(1.5, handle_rect.height() - 8.0),
+                    Vec2::new(2.0, (handle_rect.height() - 12.0).max(8.0)),
                 ),
                 SplitAxis::Horizontal => Rect::from_center_size(
                     handle_rect.center(),
-                    Vec2::new(handle_rect.width() - 8.0, 1.5),
+                    Vec2::new((handle_rect.width() - 12.0).max(8.0), 2.0),
                 ),
             };
             ui.painter()
@@ -462,6 +490,40 @@ pub fn render_pane_tree(
                 focused_pane_id,
                 active_search_block,
             );
+        }
+    }
+}
+
+pub fn compute_split_rects(
+    rect: Rect,
+    axis: SplitAxis,
+    ratio: f32,
+    gap: f32,
+) -> (Rect, Rect, Rect) {
+    match axis {
+        SplitAxis::Vertical => {
+            let usable_w = (rect.width() - gap).max(40.0);
+            let min_side = (usable_w * 0.18).min(120.0);
+            let first_w = (usable_w * ratio).clamp(min_side, usable_w - min_side);
+            let r1 = Rect::from_min_max(rect.min, Pos2::new(rect.left() + first_w, rect.bottom()));
+            let handle = Rect::from_min_max(
+                Pos2::new(r1.right(), rect.top()),
+                Pos2::new(r1.right() + gap, rect.bottom()),
+            );
+            let r2 = Rect::from_min_max(Pos2::new(handle.right(), rect.top()), rect.max);
+            (r1, handle, r2)
+        }
+        SplitAxis::Horizontal => {
+            let usable_h = (rect.height() - gap).max(40.0);
+            let min_side = (usable_h * 0.18).min(100.0);
+            let first_h = (usable_h * ratio).clamp(min_side, usable_h - min_side);
+            let r1 = Rect::from_min_max(rect.min, Pos2::new(rect.right(), rect.top() + first_h));
+            let handle = Rect::from_min_max(
+                Pos2::new(rect.left(), r1.bottom()),
+                Pos2::new(rect.right(), r1.bottom() + gap),
+            );
+            let r2 = Rect::from_min_max(Pos2::new(rect.left(), handle.bottom()), rect.max);
+            (r1, handle, r2)
         }
     }
 }
@@ -483,11 +545,117 @@ fn render_single_pane(
         app.set_focused_pane(pane_id);
     }
 
+    let pane_count = app.active_pane_count();
     let cfg = app.config.clone();
     let pad_x = cfg.window.padding_x;
     let pad_y = cfg.window.padding_y;
     let font_size = cfg.font.size;
     let line_height = cfg.font.line_height;
+
+    // Paint pane background and subtle inset focus border when multiple panes are open.
+    ui.painter()
+        .rect_filled(rect, CornerRadius::ZERO, theme.background);
+    if pane_count > 1 {
+        let border_rect = rect.shrink(1.0);
+        let stroke = if is_focused {
+            Stroke::new(1.5, theme.border_focused)
+        } else {
+            Stroke::new(1.0, theme.border)
+        };
+        ui.painter().rect_stroke(
+            border_rect,
+            CornerRadius::same(6),
+            stroke,
+            egui::StrokeKind::Inside,
+        );
+    }
+
+    let mut inner = rect.shrink2(Vec2::new(pad_x, pad_y));
+    if inner.width() < 40.0 || inner.height() < 40.0 {
+        return;
+    }
+
+    // Optional compact pane header when split so user can identify & close any pane cleanly.
+    let mut close_this_pane = false;
+    if pane_count > 1 {
+        let header_h = 34.0;
+        let header_rect = Rect::from_min_max(
+            inner.min,
+            Pos2::new(inner.right(), (inner.top() + header_h).min(inner.bottom())),
+        );
+        inner = Rect::from_min_max(
+            Pos2::new(
+                inner.left(),
+                (header_rect.bottom() + 6.0).min(inner.bottom()),
+            ),
+            inner.max,
+        );
+
+        let pane_dir_label = app
+            .panes
+            .get(&pane_id)
+            .map(|p| compact_home_path(p.engine.current_dir()))
+            .unwrap_or_default();
+
+        ui.scope_builder(
+            UiBuilder::new()
+                .id_salt(("pane_header", pane_id))
+                .max_rect(header_rect)
+                .layout(Layout::left_to_right(Align::Center)),
+            |ui| {
+                ui.set_clip_rect(header_rect);
+                Frame::new()
+                    .fill(theme.surface)
+                    .stroke(Stroke::new(
+                        1.0,
+                        if is_focused {
+                            theme.border_focused
+                        } else {
+                            theme.border
+                        },
+                    ))
+                    .corner_radius(CornerRadius::same(6))
+                    .inner_margin(Margin::symmetric(8, 2))
+                    .show(ui, |ui| {
+                        ui.set_min_width(ui.available_width());
+                        ui.horizontal(|ui| {
+                            let badge = if is_focused { "ACTIVE" } else { "PANE" };
+                            let badge_color = if is_focused {
+                                theme.accent
+                            } else {
+                                theme.foreground_subtle
+                            };
+                            ui.label(RichText::new(badge).small().strong().color(badge_color));
+                            ui.label(
+                                RichText::new(pane_dir_label)
+                                    .small()
+                                    .color(theme.foreground_muted),
+                            );
+                            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                                if ui
+                                    .add(
+                                        Button::new(
+                                            RichText::new("Close").small().color(theme.error),
+                                        )
+                                        .fill(theme.surface_highest)
+                                        .corner_radius(CornerRadius::same(5)),
+                                    )
+                                    .clicked()
+                                {
+                                    close_this_pane = true;
+                                }
+                            });
+                        });
+                    });
+            },
+        );
+    }
+
+    if close_this_pane {
+        app.set_focused_pane(pane_id);
+        app.close_active_pane(ui.ctx());
+        return;
+    }
 
     // Measure monospace cell geometry for accurate PTY sizing & Alt Screen rendering.
     let mono_font = FontId::monospace(font_size);
@@ -495,22 +663,8 @@ fn render_single_pane(
         .fonts_mut(|f| f.glyph_width(&mono_font, 'W'))
         .max(font_size * 0.58);
     let cell_h = (font_size * line_height).ceil().max(font_size + 2.0);
-    let avail_w = (rect.width() - pad_x * 2.0).max(char_w * 10.0);
-    let avail_h = (rect.height() - pad_y * 2.0).max(cell_h * 4.0);
-    let term_cols = (avail_w / char_w).floor().max(10.0) as usize;
-    let term_rows = (avail_h / cell_h).floor().max(4.0) as usize;
-
-    let frame = Frame::new()
-        .fill(theme.background)
-        .stroke(Stroke::new(
-            if is_focused && app.active_pane_count() > 1 {
-                1.2
-            } else {
-                0.0
-            },
-            theme.border_focused,
-        ))
-        .inner_margin(Margin::symmetric(pad_x.round() as i8, pad_y.round() as i8));
+    let term_cols = (inner.width() / char_w).floor().max(10.0) as usize;
+    let term_rows = (inner.height() / cell_h).floor().max(4.0) as usize;
 
     let recent_history: Vec<String> = app
         .recent_history
@@ -529,118 +683,157 @@ fn render_single_pane(
     let mut deferred_alt_bytes: Vec<u8> = Vec::new();
     let mut scroll_search_done = false;
 
-    frame.show(ui, |ui| {
-        ui.set_clip_rect(rect);
-
+    let (is_alt_screen, input_desired_h) = {
         let Some(pane) = app.panes.get_mut(&pane_id) else {
             return;
         };
-
-        // Keep PTY and AltScreenGrid synchronized with pane pixel dimensions.
         pane.pty.resize(term_cols as u16, term_rows as u16);
         pane.engine.resize(term_cols, term_rows);
+        (
+            pane.engine.is_alt_screen(),
+            pane.editor.desired_height(ui, font_size, inner.width()),
+        )
+    };
 
-        if pane.engine.is_alt_screen() {
-            deferred_alt_bytes = render_alt_screen(
-                ui,
-                pane,
-                theme,
-                font_size,
-                char_w,
-                cell_h,
-                is_focused && !shortcuts_blocked,
-            );
-            return;
-        }
+    if is_alt_screen {
+        ui.scope_builder(
+            UiBuilder::new()
+                .id_salt(("pane_alt_screen", pane_id))
+                .max_rect(inner)
+                .layout(Layout::top_down(Align::Min)),
+            |ui| {
+                ui.set_clip_rect(inner);
+                if let Some(pane) = app.panes.get(&pane_id) {
+                    deferred_alt_bytes = render_alt_screen(
+                        ui,
+                        pane,
+                        inner,
+                        theme,
+                        font_size,
+                        char_w,
+                        cell_h,
+                        is_focused && !shortcuts_blocked,
+                    );
+                }
+            },
+        );
+    } else {
+        // Compute strictly disjoint rects: [timeline_rect (top)] + [gap] + [input_rect (bottom)]
+        let gap = 8.0;
+        let input_h = input_desired_h.min((inner.height() * 0.48).max(76.0));
+        let timeline_bottom = (inner.bottom() - input_h - gap).max(inner.top() + 30.0);
+        let timeline_rect =
+            Rect::from_min_max(inner.min, Pos2::new(inner.right(), timeline_bottom));
+        let input_rect = Rect::from_min_max(
+            Pos2::new(inner.left(), (timeline_bottom + gap).min(inner.bottom())),
+            inner.max,
+        );
 
-        // Standard Block Mode: anchored Input Editor at bottom + scrollable CommandBlocks above.
-        ui.with_layout(Layout::bottom_up(Align::Min), |ui| {
-            let is_running = pane.engine.has_running_block();
-            let input_action = pane.editor.show(
-                ui,
-                pane_id,
-                theme,
-                font_size,
-                pane.engine.current_dir(),
-                pane.engine.current_git_branch(),
-                is_running,
-                app.history.as_ref(),
-                &recent_history,
-                shortcuts_blocked || !is_focused,
-            );
-            if input_action != InputAction::None {
-                deferred_input_action = Some(input_action);
-            }
+        // 1. Scrollable CommandBlock timeline inside timeline_rect
+        ui.scope_builder(
+            UiBuilder::new()
+                .id_salt(("pane_timeline", pane_id))
+                .max_rect(timeline_rect)
+                .layout(Layout::top_down(Align::Min)),
+            |ui| {
+                ui.set_clip_rect(timeline_rect);
+                let Some(pane) = app.panes.get_mut(&pane_id) else {
+                    return;
+                };
 
-            ui.add_space(8.0);
-
-            // Remaining space above input editor hosts the CommandBlock timeline.
-            let scroll_avail = ui.available_size();
-            ui.allocate_ui_with_layout(
-                scroll_avail,
-                Layout::top_down(Align::Min),
-                |ui| {
-                    if let Some(exit_code) = pane.exited {
-                        Frame::new()
-                            .fill(theme.surface_elevated)
-                            .stroke(Stroke::new(1.0, theme.warning))
-                            .corner_radius(CornerRadius::same(8))
-                            .inner_margin(Margin::symmetric(12, 8))
-                            .show(ui, |ui| {
-                                ui.label(
-                                    RichText::new(format!(
-                                        "Shell session exited (status {exit_code}). Press Cmd+W to close pane."
-                                    ))
-                                    .color(theme.warning),
-                                );
-                            });
-                        ui.add_space(8.0);
-                    }
-
-                    let scroll_id = Id::NULL.with(("block_scroll", pane_id));
-                    ScrollArea::vertical()
-                        .id_salt(scroll_id)
-                        .auto_shrink([false, false])
-                        .stick_to_bottom(true)
+                if let Some(exit_code) = pane.exited {
+                    Frame::new()
+                        .fill(theme.surface_elevated)
+                        .stroke(Stroke::new(1.0, theme.warning))
+                        .corner_radius(CornerRadius::same(8))
+                        .inner_margin(Margin::symmetric(12, 8))
                         .show(ui, |ui| {
-                            if pane.engine.blocks().is_empty() {
-                                render_welcome_empty_state(ui, pane, theme);
-                            } else {
-                                for block in pane.engine.blocks() {
-                                    let is_search_target = active_search_block == Some(block.id);
-                                    let act = render_block_card(
-                                        ui,
-                                        block,
-                                        theme,
-                                        font_size,
-                                        line_height,
-                                        &search_query,
-                                        is_search_target,
-                                    );
-                                    if act != BlockAction::None {
-                                        deferred_block_action = Some(act);
-                                    }
-                                    if is_search_target && app.search.scroll_to_active {
-                                        ui.scroll_to_cursor(Some(Align::Center));
-                                        scroll_search_done = true;
-                                    }
-                                    ui.add_space(cfg.window.block_spacing);
-                                }
-                            }
-
-                            if pane.scroll_to_bottom {
-                                let sentinel = ui.allocate_rect(
-                                    Rect::from_min_size(ui.cursor().min, Vec2::new(1.0, 1.0)),
-                                    Sense::hover(),
-                                );
-                                sentinel.scroll_to_me(Some(Align::BOTTOM));
-                                pane.scroll_to_bottom = false;
-                            }
+                            ui.set_min_width(ui.available_width());
+                            ui.label(
+                                RichText::new(format!(
+                                    "Shell session exited (status {exit_code}). Press Cmd+W to close pane."
+                                ))
+                                .color(theme.warning),
+                            );
                         });
-                },
-            );
-        });
-    });
+                    ui.add_space(8.0);
+                }
+
+                let scroll_id = Id::NULL.with(("block_scroll", pane_id));
+                ScrollArea::vertical()
+                    .id_salt(scroll_id)
+                    .max_height(ui.available_height())
+                    .auto_shrink([false, false])
+                    .stick_to_bottom(true)
+                    .show(ui, |ui| {
+                        ui.set_min_width(ui.available_width());
+                        if pane.engine.blocks().is_empty() {
+                            render_welcome_empty_state(ui, pane, theme);
+                        } else {
+                            for block in pane.engine.blocks() {
+                                let is_search_target = active_search_block == Some(block.id);
+                                let act = render_block_card(
+                                    ui,
+                                    block,
+                                    theme,
+                                    font_size,
+                                    line_height,
+                                    &search_query,
+                                    is_search_target,
+                                );
+                                if act != BlockAction::None {
+                                    deferred_block_action = Some(act);
+                                }
+                                if is_search_target && app.search.scroll_to_active {
+                                    ui.scroll_to_cursor(Some(Align::Center));
+                                    scroll_search_done = true;
+                                }
+                                ui.add_space(cfg.window.block_spacing);
+                            }
+                        }
+
+                        if pane.scroll_to_bottom {
+                            let sentinel = ui.allocate_rect(
+                                Rect::from_min_size(ui.cursor().min, Vec2::new(1.0, 1.0)),
+                                Sense::hover(),
+                            );
+                            sentinel.scroll_to_me(Some(Align::BOTTOM));
+                            pane.scroll_to_bottom = false;
+                        }
+                    });
+            },
+        );
+
+        // 2. Anchored Input Editor inside input_rect (guaranteed visible, never covered)
+        ui.scope_builder(
+            UiBuilder::new()
+                .id_salt(("pane_input", pane_id))
+                .max_rect(input_rect)
+                .layout(Layout::top_down(Align::Min)),
+            |ui| {
+                ui.set_clip_rect(input_rect);
+                let Some(pane) = app.panes.get_mut(&pane_id) else {
+                    return;
+                };
+                let is_running = pane.engine.has_running_block();
+                let input_action = pane.editor.show(
+                    ui,
+                    pane_id,
+                    theme,
+                    font_size,
+                    pane.engine.current_dir(),
+                    pane.engine.current_git_branch(),
+                    is_running,
+                    app.history.as_ref(),
+                    &recent_history,
+                    shortcuts_blocked || !is_focused,
+                );
+                if input_action != InputAction::None {
+                    deferred_input_action = Some(input_action);
+                }
+            },
+        );
+    }
 
     if scroll_search_done {
         app.search.scroll_to_active = false;
@@ -674,10 +867,10 @@ fn render_welcome_empty_state(ui: &mut Ui, pane: &PaneState, theme: &MaterialThe
                     .strong()
                     .color(theme.foreground),
             );
-            ui.add_space(4.0);
+            ui.add_space(6.0);
             ui.label(
                 RichText::new(format!(
-                    "Ready in {} · Shell: {}",
+                    "Working directory: {}   |   Shell: {}",
                     compact_home_path(pane.engine.current_dir()),
                     pane.pty.shell_program()
                 ))
@@ -686,25 +879,25 @@ fn render_welcome_empty_state(ui: &mut Ui, pane: &PaneState, theme: &MaterialThe
             ui.add_space(10.0);
             ui.label(
                 RichText::new(
-                    "Cmd+K Command Palette  ·  Cmd+D Split Right  ·  Cmd+Shift+D Split Down  ·  Cmd+T New Tab  ·  Cmd+F Find",
+                    "Type a command below and press Enter.  Shortcuts: Cmd+K Commands  |  Cmd+D Split |  |  Cmd+Shift+D Split -  |  Cmd+T New Tab  |  Cmd+F Find",
                 )
-                .small()
                 .color(theme.foreground_subtle),
             );
         });
 }
 
+#[allow(clippy::too_many_arguments)]
 fn render_alt_screen(
     ui: &mut Ui,
     pane: &PaneState,
+    rect: Rect,
     theme: &MaterialTheme,
     font_size: f32,
     char_w: f32,
     cell_h: f32,
     accepts_keyboard: bool,
 ) -> Vec<u8> {
-    let avail = ui.available_size();
-    let (rect, _resp) = ui.allocate_exact_size(avail, Sense::click());
+    let _resp = ui.allocate_rect(rect, Sense::click());
     let painter = ui.painter_at(rect);
     painter.rect_filled(rect, CornerRadius::ZERO, theme.background);
 
@@ -854,4 +1047,226 @@ fn render_alt_screen(
         });
     }
     out_bytes
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::AppConfig;
+    use crate::ui::input_editor::InputEditorState;
+    use egui::{Context, RawInput};
+
+    #[test]
+    fn split_rects_are_strictly_disjoint_for_both_axes() {
+        let root = Rect::from_min_size(Pos2::new(0.0, 42.0), Vec2::new(1160.0, 698.0));
+
+        let (v1, v_handle, v2) = compute_split_rects(root, SplitAxis::Vertical, 0.5, 8.0);
+        assert!(v1.right() <= v_handle.left());
+        assert!(v_handle.right() <= v2.left());
+        assert!(!v1.intersects(v2));
+
+        let (h1, h_handle, h2) = compute_split_rects(root, SplitAxis::Horizontal, 0.5, 8.0);
+        assert!(h1.bottom() <= h_handle.top());
+        assert!(h_handle.bottom() <= h2.top());
+        assert!(!h1.intersects(h2));
+    }
+
+    #[test]
+    fn single_pane_layout_keeps_typed_text_visible_at_bottom_without_overlap() {
+        let ctx = Context::default();
+        let cfg = AppConfig::default();
+        let theme = MaterialTheme::from_config(&cfg);
+        theme.apply_to_egui(&ctx, &cfg);
+
+        let mut editor = InputEditorState::default();
+        editor.set_text_and_focus("echo hello world".to_string());
+
+        let mut raw = RawInput {
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(1160.0, 740.0))),
+            ..Default::default()
+        };
+
+        let mut captured_timeline_rect = Rect::NOTHING;
+        let mut captured_input_rect = Rect::NOTHING;
+
+        let mut out = ctx.run_ui(raw.take(), |ui| {
+            let inner = Rect::from_min_size(Pos2::new(14.0, 52.0), Vec2::new(1132.0, 678.0));
+            let input_h = editor
+                .desired_height(ui, cfg.font.size, inner.width())
+                .min((inner.height() * 0.48).max(76.0));
+            let gap = 8.0;
+            let timeline_bottom = (inner.bottom() - input_h - gap).max(inner.top() + 30.0);
+            captured_timeline_rect =
+                Rect::from_min_max(inner.min, Pos2::new(inner.right(), timeline_bottom));
+            captured_input_rect =
+                Rect::from_min_max(Pos2::new(inner.left(), timeline_bottom + gap), inner.max);
+
+            ui.scope_builder(
+                UiBuilder::new()
+                    .id_salt("test_timeline")
+                    .max_rect(captured_timeline_rect)
+                    .layout(Layout::top_down(Align::Min)),
+                |ui| {
+                    ui.set_clip_rect(captured_timeline_rect);
+                    ScrollArea::vertical()
+                        .max_height(ui.available_height())
+                        .auto_shrink([false, false])
+                        .show(ui, |ui| {
+                            ui.label("TIMELINE_CONTENT");
+                        });
+                },
+            );
+
+            ui.scope_builder(
+                UiBuilder::new()
+                    .id_salt("test_input")
+                    .max_rect(captured_input_rect)
+                    .layout(Layout::top_down(Align::Min)),
+                |ui| {
+                    ui.set_clip_rect(captured_input_rect);
+                    editor.show(
+                        ui,
+                        1,
+                        &theme,
+                        cfg.font.size,
+                        std::path::Path::new("/tmp"),
+                        Some("main"),
+                        false,
+                        None,
+                        &[],
+                        false,
+                    );
+                },
+            );
+        });
+
+        // Clear texture deltas cleanly before drop
+        out.textures_delta.clear();
+
+        assert!(!captured_timeline_rect.intersects(captured_input_rect));
+        assert!(captured_input_rect.height() >= 70.0 && captured_input_rect.height() <= 100.0);
+        assert!(captured_timeline_rect.height() > 500.0);
+
+        let typed_shape = out.shapes.iter().find_map(|clipped| {
+            if let egui::epaint::Shape::Text(t) = &clipped.shape
+                && t.galley.text() == "echo hello world"
+            {
+                return Some((t.pos, clipped.clip_rect));
+            }
+            None
+        });
+
+        let (text_pos, clip) = typed_shape.expect("typed text galley must be painted");
+        assert!(
+            captured_input_rect.contains(text_pos),
+            "typed text pos {text_pos:?} must reside inside input_rect {captured_input_rect:?}"
+        );
+        assert!(
+            clip.intersects(captured_input_rect) && clip.height() > 10.0,
+            "typed text clip rect {clip:?} must be visible inside input_rect"
+        );
+    }
+
+    #[test]
+    fn typing_events_are_accepted_and_rendered_inside_editor() {
+        let ctx = Context::default();
+        let cfg = AppConfig::default();
+        let theme = MaterialTheme::from_config(&cfg);
+        theme.apply_to_egui(&ctx, &cfg);
+
+        let mut editor = InputEditorState::default();
+        let input_rect = Rect::from_min_size(Pos2::new(14.0, 620.0), Vec2::new(1132.0, 90.0));
+
+        // Frame 1: focus the editor
+        let raw1 = RawInput {
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(1160.0, 740.0))),
+            ..Default::default()
+        };
+        let mut out1 = ctx.run_ui(raw1, |ui| {
+            ui.scope_builder(
+                UiBuilder::new()
+                    .id_salt("typing_test_1")
+                    .max_rect(input_rect)
+                    .layout(Layout::top_down(Align::Min)),
+                |ui| {
+                    editor.show(
+                        ui,
+                        99,
+                        &theme,
+                        cfg.font.size,
+                        std::path::Path::new("/tmp"),
+                        None,
+                        false,
+                        None,
+                        &[],
+                        false,
+                    );
+                },
+            );
+        });
+        out1.textures_delta.clear();
+
+        // Frame 2: send real Text event "ls -la"
+        let raw2 = RawInput {
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(1160.0, 740.0))),
+            events: vec![Event::Text("ls -la".to_string())],
+            ..Default::default()
+        };
+        let mut out2 = ctx.run_ui(raw2, |ui| {
+            ui.scope_builder(
+                UiBuilder::new()
+                    .id_salt("typing_test_1")
+                    .max_rect(input_rect)
+                    .layout(Layout::top_down(Align::Min)),
+                |ui| {
+                    editor.show(
+                        ui,
+                        99,
+                        &theme,
+                        cfg.font.size,
+                        std::path::Path::new("/tmp"),
+                        None,
+                        false,
+                        None,
+                        &[],
+                        false,
+                    );
+                },
+            );
+        });
+        out2.textures_delta.clear();
+
+        assert_eq!(editor.buffer, "ls -la");
+        let raw3 = RawInput {
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(1160.0, 740.0))),
+            ..Default::default()
+        };
+        let mut out3 = ctx.run_ui(raw3, |ui| {
+            ui.scope_builder(
+                UiBuilder::new()
+                    .id_salt("typing_test_1")
+                    .max_rect(input_rect)
+                    .layout(Layout::top_down(Align::Min)),
+                |ui| {
+                    editor.show(
+                        ui,
+                        99,
+                        &theme,
+                        cfg.font.size,
+                        std::path::Path::new("/tmp"),
+                        None,
+                        false,
+                        None,
+                        &[],
+                        false,
+                    );
+                },
+            );
+        });
+        out3.textures_delta.clear();
+        let found = out3.shapes.iter().any(
+            |c| matches!(&c.shape, egui::epaint::Shape::Text(t) if t.galley.text() == "ls -la"),
+        );
+        assert!(found, "typed text 'ls -la' must appear in painted frame");
+    }
 }

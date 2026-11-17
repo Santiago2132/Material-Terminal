@@ -5,8 +5,8 @@ use crate::history::HistoryStore;
 use crate::ui::theme::MaterialTheme;
 use egui::text::{CCursor, CCursorRange};
 use egui::{
-    Align, Align2, CornerRadius, EventFilter, FontId, Frame, Id, Key, KeyboardShortcut, Layout,
-    Margin, Modifiers, RichText, Stroke, TextEdit, Ui,
+    Align, Align2, Button, CornerRadius, EventFilter, FontId, Frame, Id, Key, KeyboardShortcut,
+    Layout, Margin, Modifiers, RichText, ScrollArea, Stroke, TextEdit, Ui,
 };
 use std::path::{Path, PathBuf};
 
@@ -143,7 +143,31 @@ impl InputEditorState {
         self.ghost_suffix = history.and_then(|h| h.suggest_ghost_suffix(&self.buffer, working_dir));
     }
 
-    /// Renders the Material 3 bottom input dock and returns any submitted action.
+    /// Computes exact desired pixel height for the anchored bottom input dock (1..=6 visible rows).
+    pub fn desired_height(&self, ui: &Ui, font_size: f32, pane_inner_width: f32) -> f32 {
+        let font_id = FontId::monospace(font_size);
+        let row_h = ui
+            .fonts_mut(|f| f.row_height(&font_id))
+            .max(font_size * 1.35);
+        let wrap_w = (pane_inner_width - 54.0).max(80.0);
+        let text_h = if self.buffer.is_empty() {
+            row_h
+        } else {
+            let job = egui::text::LayoutJob::simple(
+                self.buffer.clone(),
+                font_id,
+                egui::Color32::WHITE,
+                wrap_w,
+            );
+            let galley = ui.fonts_mut(|f| f.layout_job(job));
+            galley.size().y.max(row_h)
+        };
+        let clamped_text_h = text_h.clamp(row_h, row_h * 6.0);
+        // Header row (~26px) + spacing (6px) + frame vertical margins (20px) + padding slack + text height
+        (64.0 + clamped_text_h).ceil()
+    }
+
+    /// Renders the Material 3 bottom input dock inside a top-down explicit rect.
     #[allow(clippy::too_many_arguments)]
     pub fn show(
         &mut self,
@@ -225,18 +249,19 @@ impl InputEditorState {
         let card_frame = Frame::new()
             .fill(theme.surface_elevated)
             .stroke(Stroke::new(
-                if is_focused { 1.4 } else { 1.0 },
+                if is_focused { 1.6 } else { 1.0 },
                 border_color,
             ))
             .corner_radius(CornerRadius::same(theme.corner_radius.round() as u8))
-            .inner_margin(Margin::symmetric(12, 9));
+            .inner_margin(Margin::symmetric(12, 10));
 
         card_frame.show(ui, |ui| {
-            // Context header line: formatted directory + Git branch + mode hint
+            ui.set_min_width(ui.available_width());
+
+            // Row 1 (TOP): Directory + Git branch + Run/Interrupt hint
             ui.horizontal(|ui| {
                 ui.label(
                     RichText::new(compact_home_path(working_dir))
-                        .small()
                         .strong()
                         .color(theme.accent),
                 );
@@ -244,12 +269,10 @@ impl InputEditorState {
                     Frame::new()
                         .fill(theme.accent_soft)
                         .corner_radius(CornerRadius::same(6))
-                        .inner_margin(Margin::symmetric(6, 1))
+                        .inner_margin(Margin::symmetric(8, 2))
                         .show(ui, |ui| {
                             ui.label(
-                                RichText::new(format!("git:{branch}"))
-                                    .small()
-                                    .color(theme.foreground),
+                                RichText::new(format!("git:{branch}")).color(theme.foreground),
                             );
                         });
                 }
@@ -257,25 +280,25 @@ impl InputEditorState {
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                     if is_running {
                         if ui
-                            .small_button(RichText::new("Stop (^C)").color(theme.error))
+                            .add(Button::new(
+                                RichText::new("Stop (^C)").strong().color(theme.error),
+                            ))
                             .clicked()
                         {
                             action = InputAction::SendInterrupt;
                         }
                         ui.label(
-                            RichText::new("Running · stdin active")
-                                .small()
-                                .color(theme.warning),
+                            RichText::new("Running (typing goes to stdin)").color(theme.warning),
                         );
                     } else if self.ghost_suffix.is_some() && cursor_at_end {
                         ui.label(
-                            RichText::new("Tab to complete · Shift+Enter newline")
+                            RichText::new("Tab: complete · Shift+Enter: newline")
                                 .small()
-                                .color(theme.foreground_subtle),
+                                .color(theme.foreground_muted),
                         );
                     } else {
                         ui.label(
-                            RichText::new("Enter run · Shift+Enter newline")
+                            RichText::new("Enter: run · Shift+Enter: newline")
                                 .small()
                                 .color(theme.foreground_subtle),
                         );
@@ -283,84 +306,95 @@ impl InputEditorState {
                 });
             });
 
-            ui.add_space(4.0);
+            ui.add_space(6.0);
 
-            // Prompt glyph + multiline TextEdit
-            ui.horizontal_top(|ui| {
-                let prompt_glyph = if is_running { "▶" } else { "❯" };
-                let prompt_color = if is_running {
-                    theme.warning
-                } else {
-                    theme.accent
-                };
-                ui.label(
-                    RichText::new(prompt_glyph)
-                        .font(FontId::monospace(font_size))
-                        .strong()
-                        .color(prompt_color),
-                );
+            // Row 2 (BOTTOM): Prompt '>' + scrollable multiline TextEdit
+            let avail_text_h = ui.available_height().max(font_size * 1.6);
+            ScrollArea::vertical()
+                .id_salt(Id::NULL.with(("input_scroll", pane_id)))
+                .max_height(avail_text_h)
+                .auto_shrink([false, false])
+                .show(ui, |ui| {
+                    ui.horizontal_top(|ui| {
+                        let prompt_glyph = if is_running { "stdin>" } else { ">" };
+                        let prompt_color = if is_running {
+                            theme.warning
+                        } else {
+                            theme.accent
+                        };
+                        ui.label(
+                            RichText::new(prompt_glyph)
+                                .font(FontId::monospace(font_size))
+                                .strong()
+                                .color(prompt_color),
+                        );
 
-                let hint = if is_running {
-                    "Send line to running process stdin..."
-                } else {
-                    "Enter a command..."
-                };
+                        let hint = if is_running {
+                            "Send input line to running process..."
+                        } else {
+                            "Type a command..."
+                        };
 
-                let event_filter = EventFilter {
-                    tab: true,
-                    horizontal_arrows: true,
-                    vertical_arrows: true,
-                    escape: false,
-                };
+                        let event_filter = EventFilter {
+                            tab: true,
+                            horizontal_arrows: true,
+                            vertical_arrows: true,
+                            escape: false,
+                        };
 
-                let text_edit = TextEdit::multiline(&mut self.buffer)
-                    .id(editor_id)
-                    .desired_width(f32::INFINITY)
-                    .desired_rows(1)
-                    .frame(Frame::NONE)
-                    .font(FontId::monospace(font_size))
-                    .text_color(theme.foreground)
-                    .hint_text(RichText::new(hint).color(theme.foreground_subtle))
-                    .return_key(Some(KeyboardShortcut::new(Modifiers::SHIFT, Key::Enter)))
-                    .event_filter(event_filter);
+                        let editor_width = ui.available_width().max(60.0);
+                        let text_edit = TextEdit::multiline(&mut self.buffer)
+                            .id(editor_id)
+                            .desired_width(editor_width)
+                            .desired_rows(1)
+                            .frame(Frame::NONE)
+                            .font(FontId::monospace(font_size))
+                            .text_color(theme.foreground)
+                            .hint_text(RichText::new(hint).color(theme.foreground_subtle))
+                            .return_key(Some(KeyboardShortcut::new(Modifiers::SHIFT, Key::Enter)))
+                            .event_filter(event_filter);
 
-                let mut output = text_edit.show(ui);
+                        let mut output = text_edit.show(ui);
+                        if output.response.changed() {
+                            ui.ctx().request_repaint();
+                        }
 
-                if self.request_focus {
-                    output.response.request_focus();
-                    self.request_focus = false;
-                }
+                        if self.request_focus {
+                            output.response.request_focus();
+                            self.request_focus = false;
+                        }
 
-                if self.move_cursor_to_end {
-                    let end_cc = CCursor::new(self.buffer.chars().count());
-                    output
-                        .state
-                        .cursor
-                        .set_char_range(Some(CCursorRange::one(end_cc)));
-                    output.state.clone().store(ui.ctx(), output.response.id);
-                    output.cursor_range = Some(CCursorRange::one(end_cc));
-                    self.move_cursor_to_end = false;
-                }
+                        if self.move_cursor_to_end {
+                            let end_cc = CCursor::new(self.buffer.chars().count());
+                            output
+                                .state
+                                .cursor
+                                .set_char_range(Some(CCursorRange::one(end_cc)));
+                            output.state.clone().store(ui.ctx(), output.response.id);
+                            output.cursor_range = Some(CCursorRange::one(end_cc));
+                            self.move_cursor_to_end = false;
+                        }
 
-                // Render ghost autocomplete text directly after the cursor at end of line.
-                if !is_running
-                    && !self.buffer.is_empty()
-                    && let Some(suffix) = &self.ghost_suffix
-                    && is_cursor_at_end_output(&output, &self.buffer)
-                {
-                    let end_cursor = CCursor::new(self.buffer.chars().count());
-                    let cursor_rect = output.galley.pos_from_cursor(end_cursor);
-                    let pos = output.galley_pos + cursor_rect.left_top().to_vec2();
-                    let painter = ui.painter_at(output.text_clip_rect);
-                    painter.text(
-                        pos,
-                        Align2::LEFT_TOP,
-                        suffix,
-                        FontId::monospace(font_size),
-                        theme.foreground_subtle,
-                    );
-                }
-            });
+                        // Render ghost autocomplete text directly after the cursor at end of line.
+                        if !is_running
+                            && !self.buffer.is_empty()
+                            && let Some(suffix) = &self.ghost_suffix
+                            && is_cursor_at_end_output(&output, &self.buffer)
+                        {
+                            let end_cursor = CCursor::new(self.buffer.chars().count());
+                            let cursor_rect = output.galley.pos_from_cursor(end_cursor);
+                            let pos = output.galley_pos + cursor_rect.left_top().to_vec2();
+                            let painter = ui.painter_at(output.text_clip_rect);
+                            painter.text(
+                                pos,
+                                Align2::LEFT_TOP,
+                                suffix,
+                                FontId::monospace(font_size),
+                                theme.foreground_subtle,
+                            );
+                        }
+                    });
+                });
         });
 
         action

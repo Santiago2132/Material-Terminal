@@ -285,11 +285,11 @@ pub struct WindowConfig {
 impl Default for WindowConfig {
     fn default() -> Self {
         Self {
-            opacity: 0.96,
+            opacity: 1.0,
             padding_x: 14.0,
             padding_y: 10.0,
             block_spacing: 10.0,
-            corner_radius: 12.0,
+            corner_radius: 10.0,
         }
     }
 }
