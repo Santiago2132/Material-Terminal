@@ -37,8 +37,12 @@ impl HistoryStore {
             fs::create_dir_all(parent)
                 .map_err(|e| format!("Failed to create database dir {}: {e}", parent.display()))?;
         }
-        let conn = Connection::open(db_path)
-            .map_err(|e| format!("Failed to open SQLite history at {}: {e}", db_path.display()))?;
+        let conn = Connection::open(db_path).map_err(|e| {
+            format!(
+                "Failed to open SQLite history at {}: {e}",
+                db_path.display()
+            )
+        })?;
         let store = Self { conn };
         store.init_schema()?;
         Ok(store)
@@ -207,8 +211,21 @@ fn suggest_path_suffix(input: &str, working_dir: &Path) -> Option<String> {
     let first_word = head.split_whitespace().next().unwrap_or("");
     let path_command = matches!(
         first_word,
-        "cd" | "ls" | "cat" | "bat" | "less" | "vim" | "nvim" | "nano" | "open" | "rm" | "cp"
-            | "mv" | "mkdir" | "touch" | "head" | "tail"
+        "cd" | "ls"
+            | "cat"
+            | "bat"
+            | "less"
+            | "vim"
+            | "nvim"
+            | "nano"
+            | "open"
+            | "rm"
+            | "cp"
+            | "mv"
+            | "mkdir"
+            | "touch"
+            | "head"
+            | "tail"
     );
     let looks_like_path = token.starts_with("./")
         || token.starts_with("../")

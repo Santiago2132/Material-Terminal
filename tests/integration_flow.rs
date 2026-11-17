@@ -148,7 +148,11 @@ fn live_zsh_pty_drives_command_blocks_truecolor_cwd_and_history() {
     }
 
     assert!(b2_done, "second block never completed");
-    assert!(saw_dir_change, "OSC 7 never updated directory to {}", sub_dir.display());
+    assert!(
+        saw_dir_change,
+        "OSC 7 never updated directory to {}",
+        sub_dir.display()
+    );
     assert_eq!(engine.blocks()[1].status, CommandStatus::Error(1));
     assert_eq!(engine.current_dir(), sub_dir);
 

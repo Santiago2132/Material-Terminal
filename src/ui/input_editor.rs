@@ -224,7 +224,10 @@ impl InputEditorState {
 
         let card_frame = Frame::new()
             .fill(theme.surface_elevated)
-            .stroke(Stroke::new(if is_focused { 1.4 } else { 1.0 }, border_color))
+            .stroke(Stroke::new(
+                if is_focused { 1.4 } else { 1.0 },
+                border_color,
+            ))
             .corner_radius(CornerRadius::same(theme.corner_radius.round() as u8))
             .inner_margin(Margin::symmetric(12, 9));
 

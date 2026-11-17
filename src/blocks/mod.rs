@@ -397,12 +397,7 @@ impl TerminalEngine {
         self.state.current_git_branch.as_deref()
     }
 
-    pub fn update_git_branch(
-        &mut self,
-        dir: &Path,
-        block_id: Option<u64>,
-        branch: Option<String>,
-    ) {
+    pub fn update_git_branch(&mut self, dir: &Path, block_id: Option<u64>, branch: Option<String>) {
         if self.state.current_dir == dir {
             self.state.current_git_branch = branch.clone();
         }

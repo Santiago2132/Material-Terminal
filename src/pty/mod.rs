@@ -170,9 +170,8 @@ impl PtySession {
                         Err(err) => {
                             // EIO is normal on macOS/Linux when slave PTY closes on shell exit.
                             if err.raw_os_error() != Some(5) {
-                                let _ = reader_tx.send(PtyEvent::Error(format!(
-                                    "PTY read error: {err}"
-                                )));
+                                let _ = reader_tx
+                                    .send(PtyEvent::Error(format!("PTY read error: {err}")));
                             }
                             break;
                         }
@@ -190,18 +189,16 @@ impl PtySession {
                     match msg {
                         PtyControl::Write(bytes) => {
                             if let Err(err) = writer.write_all(&bytes) {
-                                let _ = writer_tx.send(PtyEvent::Error(format!(
-                                    "PTY write error: {err}"
-                                )));
+                                let _ = writer_tx
+                                    .send(PtyEvent::Error(format!("PTY write error: {err}")));
                                 break;
                             }
                             let _ = writer.flush();
                         }
                         PtyControl::Resize(size) => {
                             if let Err(err) = master.resize(size) {
-                                let _ = writer_tx.send(PtyEvent::Error(format!(
-                                    "PTY resize error: {err}"
-                                )));
+                                let _ = writer_tx
+                                    .send(PtyEvent::Error(format!("PTY resize error: {err}")));
                             }
                         }
                         PtyControl::Shutdown => break,

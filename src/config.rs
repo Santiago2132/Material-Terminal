@@ -535,8 +535,8 @@ impl ConfigManager {
     fn parse_and_validate_file(path: &Path) -> Result<AppConfig, String> {
         let raw = fs::read_to_string(path)
             .map_err(|e| format!("Failed to read {}: {e}", path.display()))?;
-        let parsed: AppConfig = toml::from_str(&raw)
-            .map_err(|e| format!("TOML syntax error in config.toml: {e}"))?;
+        let parsed: AppConfig =
+            toml::from_str(&raw).map_err(|e| format!("TOML syntax error in config.toml: {e}"))?;
         parsed.validate()?;
         Ok(parsed)
     }
@@ -609,7 +609,9 @@ impl ConfigManager {
         })
         .ok()?;
 
-        watcher.watch(&watch_dir, RecursiveMode::NonRecursive).ok()?;
+        watcher
+            .watch(&watch_dir, RecursiveMode::NonRecursive)
+            .ok()?;
         Some(watcher)
     }
 
@@ -643,8 +645,7 @@ impl ConfigManager {
             .to_commented_toml()
             .map_err(|e| format!("Failed to serialize config: {e}"))?;
         if let Some(parent) = self.path.parent() {
-            fs::create_dir_all(parent)
-                .map_err(|e| format!("Failed to create config dir: {e}"))?;
+            fs::create_dir_all(parent).map_err(|e| format!("Failed to create config dir: {e}"))?;
         }
         fs::write(&self.path, serialized)
             .map_err(|e| format!("Failed to write {}: {e}", self.path.display()))?;
