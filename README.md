@@ -68,11 +68,11 @@ size = 13.5
 line_height = 1.38
 
 [window]
-opacity = 0.96
+opacity = 1.0
 padding_x = 14.0
 padding_y = 10.0
 block_spacing = 10.0
-corner_radius = 12.0
+corner_radius = 10.0
 
 [shell]
 # program = "/bin/zsh"

@@ -805,11 +805,15 @@ impl eframe::App for MaterialTerminalApp {
         CentralPanel::no_frame()
             .frame(Frame::new().fill(theme.background))
             .show(ui, |ui| {
+                ui.spacing_mut().item_spacing.y = 0.0;
                 render_top_bar(ui, self, &theme);
                 render_notifications(ui, self, &theme);
                 render_search_bar(ui, self, &theme, focused_pane_id);
 
                 let workspace_rect = ui.available_rect_before_wrap();
+                if workspace_rect.width() > 1.0 && workspace_rect.height() > 1.0 {
+                    ui.allocate_rect(workspace_rect, egui::Sense::hover());
+                }
                 if let Some(mut root) = self.tabs.get(active_tab_idx).map(|t| t.root.clone()) {
                     render_pane_tree(
                         ui,

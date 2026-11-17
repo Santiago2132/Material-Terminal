@@ -39,8 +39,8 @@ pub struct MaterialTheme {
 impl MaterialTheme {
     pub fn from_config(cfg: &AppConfig) -> Self {
         let palette = cfg.palette();
-        let alpha = (cfg.window.opacity.clamp(0.25, 1.0) * 255.0).round() as u8;
-        let card_alpha = alpha.max(230);
+        let alpha = 255u8;
+        let card_alpha = 255u8;
 
         Self {
             palette,
@@ -162,16 +162,18 @@ impl MaterialTheme {
 
         let mut style = (*ctx.global_style()).clone();
         let text_styles: BTreeMap<EguiTextStyle, FontId> = [
-            (EguiTextStyle::Small, FontId::proportional(11.5)),
-            (EguiTextStyle::Body, FontId::proportional(13.0)),
-            (EguiTextStyle::Button, FontId::proportional(12.5)),
-            (EguiTextStyle::Heading, FontId::proportional(16.0)),
+            (EguiTextStyle::Small, FontId::proportional(12.0)),
+            (EguiTextStyle::Body, FontId::proportional(13.5)),
+            (EguiTextStyle::Button, FontId::proportional(13.0)),
+            (EguiTextStyle::Heading, FontId::proportional(16.5)),
             (EguiTextStyle::Monospace, FontId::monospace(cfg.font.size)),
         ]
         .into();
         style.text_styles = text_styles;
         style.spacing.item_spacing = egui::vec2(8.0, 6.0);
-        style.spacing.scroll.bar_width = 6.0;
+        style.spacing.button_padding = egui::vec2(10.0, 5.0);
+        style.spacing.interact_size.y = 26.0;
+        style.spacing.scroll.bar_width = 7.0;
         style.spacing.scroll.floating = true;
         ctx.set_global_style(style);
     }
