@@ -2,15 +2,15 @@
 //! background event polling, global shortcuts, and `eframe::App` implementation.
 
 use crate::blocks::{AsyncGitDetector, EngineEvent, TerminalEngine};
-use crate::config::{AppConfig, ConfigEvent, ConfigManager};
+use crate::config::{AppConfig, BuiltinTheme, ConfigEvent, ConfigManager};
 use crate::history::{HistoryEntry, HistoryStore};
 use crate::pty::{PtyEvent, PtySession, PtySpawnConfig};
 use crate::ui::block_view::BlockAction;
 use crate::ui::command_palette::{CommandPaletteState, PaletteAction};
 use crate::ui::input_editor::{InputAction, InputEditorState, compact_home_path};
-use crate::ui::theme::{MaterialTheme, apply_configured_font};
+use crate::ui::theme::{MaterialTheme, apply_configured_font, paint_liquid_backdrop};
 use crate::ui::{render_notifications, render_pane_tree, render_search_bar, render_top_bar};
-use egui::{CentralPanel, Context, Frame, Key, Modifiers, ViewportCommand};
+use egui::{CentralPanel, Context, Event, Frame, Id, Key, Modifiers, ViewportCommand};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -398,6 +398,39 @@ impl MaterialTerminalApp {
             .unwrap_or_else(|| compact_home_path(dir))
     }
 
+    pub fn pane_shell_name(&self, pane_id: u64) -> String {
+        let Some(pane) = self.panes.get(&pane_id) else {
+            return "sh".to_string();
+        };
+        std::path::Path::new(pane.pty.shell_program())
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or("sh")
+            .to_string()
+    }
+
+    pub fn tab_shell_badge(&self, tab: &TabState) -> String {
+        self.pane_shell_name(tab.focused_pane)
+    }
+
+    pub fn cycle_theme(&mut self) {
+        let cur = self.config.resolved_theme();
+        let all = BuiltinTheme::ALL;
+        let idx = all.iter().position(|t| *t == cur).unwrap_or(0);
+        let next = all[(idx + 1) % all.len()];
+        match self.config_manager.set_theme(next) {
+            Ok(new_cfg) => {
+                self.config = new_cfg;
+                self.config_error = None;
+                self.show_toast(format!("Theme: {}", next.display_name()));
+            }
+            Err(err) => {
+                self.config_error = Some(err);
+            }
+        }
+        self.focus_active_pane_editor();
+    }
+
     pub fn toggle_search(&mut self) {
         self.search.open = !self.search.open;
         if self.search.open {
@@ -438,6 +471,9 @@ impl MaterialTerminalApp {
                     block.is_collapsed = !block.is_collapsed;
                 }
             }
+        }
+        if let Some(pane) = self.panes.get_mut(&pane_id) {
+            pane.editor.request_focus = true;
         }
     }
 
@@ -802,33 +838,62 @@ impl eframe::App for MaterialTerminalApp {
             None
         };
 
-        CentralPanel::no_frame()
-            .frame(Frame::new().fill(theme.background))
-            .show(ui, |ui| {
-                ui.spacing_mut().item_spacing.y = 0.0;
-                render_top_bar(ui, self, &theme);
-                render_notifications(ui, self, &theme);
-                render_search_bar(ui, self, &theme, focused_pane_id);
+        // Recover input focus automatically if user starts typing outside modals/alt-screen.
+        if !self.palette.open && !self.search.open {
+            let editor_id = Id::NULL.with(("material_input_editor", focused_pane_id));
+            let editor_focused = ctx.memory(|m| m.has_focus(editor_id));
+            let in_alt_screen = self
+                .panes
+                .get(&focused_pane_id)
+                .is_some_and(|p| p.engine.is_alt_screen());
+            if !editor_focused && !in_alt_screen {
+                let typed_text: String = ctx.input(|i| {
+                    i.events
+                        .iter()
+                        .filter_map(|e| match e {
+                            Event::Text(t) if !i.modifiers.command && !i.modifiers.ctrl => {
+                                Some(t.as_str())
+                            }
+                            _ => None,
+                        })
+                        .collect()
+                });
+                if !typed_text.is_empty()
+                    && let Some(pane) = self.panes.get_mut(&focused_pane_id)
+                {
+                    pane.editor.buffer.push_str(&typed_text);
+                    pane.editor.request_focus = true;
+                }
+            }
+        }
 
-                let workspace_rect = ui.available_rect_before_wrap();
-                if workspace_rect.width() > 1.0 && workspace_rect.height() > 1.0 {
-                    ui.allocate_rect(workspace_rect, egui::Sense::hover());
+        CentralPanel::no_frame().frame(Frame::NONE).show(ui, |ui| {
+            ui.spacing_mut().item_spacing.y = 0.0;
+            paint_liquid_backdrop(ui.painter(), ui.max_rect(), &theme);
+
+            render_top_bar(ui, self, &theme);
+            render_notifications(ui, self, &theme);
+            render_search_bar(ui, self, &theme, focused_pane_id);
+
+            let workspace_rect = ui.available_rect_before_wrap();
+            if workspace_rect.width() > 1.0 && workspace_rect.height() > 1.0 {
+                ui.allocate_rect(workspace_rect, egui::Sense::hover());
+            }
+            if let Some(mut root) = self.tabs.get(active_tab_idx).map(|t| t.root.clone()) {
+                render_pane_tree(
+                    ui,
+                    &mut root,
+                    workspace_rect,
+                    self,
+                    &theme,
+                    focused_pane_id,
+                    active_search_block,
+                );
+                if let Some(tab) = self.tabs.get_mut(active_tab_idx) {
+                    tab.root = root;
                 }
-                if let Some(mut root) = self.tabs.get(active_tab_idx).map(|t| t.root.clone()) {
-                    render_pane_tree(
-                        ui,
-                        &mut root,
-                        workspace_rect,
-                        self,
-                        &theme,
-                        focused_pane_id,
-                        active_search_block,
-                    );
-                    if let Some(tab) = self.tabs.get_mut(active_tab_idx) {
-                        tab.root = root;
-                    }
-                }
-            });
+            }
+        });
 
         // Floating Command Palette modal (`Cmd+K` / `Ctrl+Shift+P`)
         let active_theme = self.config.resolved_theme();

@@ -26,18 +26,22 @@ impl Rgb {
     }
 }
 
-/// Built-in color themes combining classic palettes with Material Design 3 surface hierarchy.
+/// Built-in color themes combining Liquid Glass tonal surfaces with classic developer palettes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BuiltinTheme {
+    Obsidian,
     TokyoNight,
+    TealFrost,
     CatppuccinMocha,
     Dracula,
     GruvboxDark,
 }
 
 impl BuiltinTheme {
-    pub const ALL: [BuiltinTheme; 4] = [
+    pub const ALL: [BuiltinTheme; 6] = [
+        BuiltinTheme::Obsidian,
         BuiltinTheme::TokyoNight,
+        BuiltinTheme::TealFrost,
         BuiltinTheme::CatppuccinMocha,
         BuiltinTheme::Dracula,
         BuiltinTheme::GruvboxDark,
@@ -45,7 +49,9 @@ impl BuiltinTheme {
 
     pub fn id(self) -> &'static str {
         match self {
+            Self::Obsidian => "obsidian",
             Self::TokyoNight => "tokyo-night",
+            Self::TealFrost => "teal-frost",
             Self::CatppuccinMocha => "catppuccin-mocha",
             Self::Dracula => "dracula",
             Self::GruvboxDark => "gruvbox-dark",
@@ -54,7 +60,9 @@ impl BuiltinTheme {
 
     pub fn display_name(self) -> &'static str {
         match self {
+            Self::Obsidian => "Obsidian",
             Self::TokyoNight => "Tokyo Night",
+            Self::TealFrost => "Teal Frost",
             Self::CatppuccinMocha => "Catppuccin Mocha",
             Self::Dracula => "Dracula",
             Self::GruvboxDark => "Gruvbox Dark",
@@ -64,7 +72,9 @@ impl BuiltinTheme {
     pub fn from_name(name: &str) -> Option<Self> {
         let normalized = name.trim().to_ascii_lowercase().replace(['_', ' '], "-");
         match normalized.as_str() {
-            "tokyo-night" | "tokyonight" => Some(Self::TokyoNight),
+            "obsidian" | "liquid-glass" => Some(Self::Obsidian),
+            "tokyo-night" | "tokyonight" | "tokyo" => Some(Self::TokyoNight),
+            "teal-frost" | "frost" => Some(Self::TealFrost),
             "catppuccin-mocha" | "catppuccin" => Some(Self::CatppuccinMocha),
             "dracula" => Some(Self::Dracula),
             "gruvbox-dark" | "gruvbox" => Some(Self::GruvboxDark),
@@ -74,20 +84,62 @@ impl BuiltinTheme {
 
     pub fn palette(self) -> ThemePalette {
         match self {
+            Self::Obsidian => ThemePalette {
+                name: self.display_name(),
+                id: self.id(),
+                background: Rgb::new(8, 12, 22),
+                surface: Rgb::new(15, 20, 32),
+                surface_elevated: Rgb::new(20, 27, 42),
+                surface_highest: Rgb::new(30, 40, 61),
+                orb_primary: Rgb::new(14, 92, 150),
+                orb_secondary: Rgb::new(67, 56, 168),
+                border: Rgb::new(42, 52, 74),
+                border_focused: Rgb::new(56, 189, 248),
+                foreground: Rgb::new(241, 245, 249),
+                foreground_muted: Rgb::new(148, 163, 184),
+                foreground_subtle: Rgb::new(100, 116, 139),
+                accent: Rgb::new(56, 189, 248),
+                accent_soft: Rgb::new(24, 58, 88),
+                success: Rgb::new(52, 211, 153),
+                error: Rgb::new(248, 113, 113),
+                warning: Rgb::new(251, 191, 36),
+                info: Rgb::new(56, 189, 248),
+                selection_bg: Rgb::new(35, 68, 108),
+                ansi: [
+                    Rgb::new(15, 23, 42),
+                    Rgb::new(248, 113, 113),
+                    Rgb::new(52, 211, 153),
+                    Rgb::new(251, 191, 36),
+                    Rgb::new(56, 189, 248),
+                    Rgb::new(167, 139, 250),
+                    Rgb::new(34, 211, 238),
+                    Rgb::new(203, 213, 225),
+                    Rgb::new(71, 85, 105),
+                    Rgb::new(252, 165, 165),
+                    Rgb::new(110, 231, 183),
+                    Rgb::new(253, 224, 71),
+                    Rgb::new(125, 211, 252),
+                    Rgb::new(196, 181, 253),
+                    Rgb::new(103, 232, 249),
+                    Rgb::new(248, 250, 252),
+                ],
+            },
             Self::TokyoNight => ThemePalette {
                 name: self.display_name(),
                 id: self.id(),
-                background: Rgb::new(22, 22, 30),
-                surface: Rgb::new(26, 27, 38),
-                surface_elevated: Rgb::new(31, 33, 47),
-                surface_highest: Rgb::new(41, 44, 62),
-                border: Rgb::new(52, 56, 78),
+                background: Rgb::new(12, 15, 26),
+                surface: Rgb::new(20, 22, 36),
+                surface_elevated: Rgb::new(28, 31, 48),
+                surface_highest: Rgb::new(41, 46, 68),
+                orb_primary: Rgb::new(68, 28, 132),
+                orb_secondary: Rgb::new(34, 74, 156),
+                border: Rgb::new(48, 54, 78),
                 border_focused: Rgb::new(122, 162, 247),
-                foreground: Rgb::new(192, 202, 245),
-                foreground_muted: Rgb::new(139, 148, 186),
-                foreground_subtle: Rgb::new(86, 95, 137),
+                foreground: Rgb::new(212, 220, 248),
+                foreground_muted: Rgb::new(148, 158, 196),
+                foreground_subtle: Rgb::new(92, 102, 144),
                 accent: Rgb::new(122, 162, 247),
-                accent_soft: Rgb::new(45, 63, 118),
+                accent_soft: Rgb::new(42, 59, 108),
                 success: Rgb::new(158, 206, 106),
                 error: Rgb::new(247, 118, 142),
                 warning: Rgb::new(224, 175, 104),
@@ -112,14 +164,56 @@ impl BuiltinTheme {
                     Rgb::new(213, 218, 246),
                 ],
             },
+            Self::TealFrost => ThemePalette {
+                name: self.display_name(),
+                id: self.id(),
+                background: Rgb::new(9, 16, 24),
+                surface: Rgb::new(16, 26, 36),
+                surface_elevated: Rgb::new(22, 34, 46),
+                surface_highest: Rgb::new(34, 49, 64),
+                orb_primary: Rgb::new(15, 118, 110),
+                orb_secondary: Rgb::new(29, 78, 126),
+                border: Rgb::new(44, 64, 82),
+                border_focused: Rgb::new(45, 212, 191),
+                foreground: Rgb::new(240, 249, 250),
+                foreground_muted: Rgb::new(148, 173, 184),
+                foreground_subtle: Rgb::new(96, 122, 134),
+                accent: Rgb::new(45, 212, 191),
+                accent_soft: Rgb::new(22, 74, 76),
+                success: Rgb::new(110, 231, 183),
+                error: Rgb::new(253, 164, 175),
+                warning: Rgb::new(252, 211, 77),
+                info: Rgb::new(56, 189, 248),
+                selection_bg: Rgb::new(28, 78, 86),
+                ansi: [
+                    Rgb::new(17, 24, 39),
+                    Rgb::new(253, 164, 175),
+                    Rgb::new(110, 231, 183),
+                    Rgb::new(252, 211, 77),
+                    Rgb::new(56, 189, 248),
+                    Rgb::new(192, 132, 252),
+                    Rgb::new(45, 212, 191),
+                    Rgb::new(203, 213, 225),
+                    Rgb::new(75, 85, 99),
+                    Rgb::new(254, 205, 211),
+                    Rgb::new(167, 243, 208),
+                    Rgb::new(253, 230, 138),
+                    Rgb::new(125, 211, 252),
+                    Rgb::new(216, 180, 254),
+                    Rgb::new(94, 234, 212),
+                    Rgb::new(248, 250, 252),
+                ],
+            },
             Self::CatppuccinMocha => ThemePalette {
                 name: self.display_name(),
                 id: self.id(),
-                background: Rgb::new(24, 24, 37),
-                surface: Rgb::new(30, 30, 46),
-                surface_elevated: Rgb::new(38, 38, 57),
+                background: Rgb::new(19, 19, 30),
+                surface: Rgb::new(28, 28, 43),
+                surface_elevated: Rgb::new(36, 36, 54),
                 surface_highest: Rgb::new(49, 50, 68),
-                border: Rgb::new(69, 71, 90),
+                orb_primary: Rgb::new(92, 62, 146),
+                orb_secondary: Rgb::new(46, 86, 148),
+                border: Rgb::new(66, 68, 88),
                 border_focused: Rgb::new(137, 180, 250),
                 foreground: Rgb::new(205, 214, 244),
                 foreground_muted: Rgb::new(166, 173, 200),
@@ -153,11 +247,13 @@ impl BuiltinTheme {
             Self::Dracula => ThemePalette {
                 name: self.display_name(),
                 id: self.id(),
-                background: Rgb::new(33, 34, 44),
-                surface: Rgb::new(40, 42, 54),
-                surface_elevated: Rgb::new(48, 51, 66),
-                surface_highest: Rgb::new(68, 71, 90),
-                border: Rgb::new(76, 80, 102),
+                background: Rgb::new(24, 25, 34),
+                surface: Rgb::new(34, 36, 48),
+                surface_elevated: Rgb::new(43, 46, 61),
+                surface_highest: Rgb::new(62, 66, 86),
+                orb_primary: Rgb::new(98, 56, 146),
+                orb_secondary: Rgb::new(138, 48, 96),
+                border: Rgb::new(72, 76, 98),
                 border_focused: Rgb::new(189, 147, 249),
                 foreground: Rgb::new(248, 248, 242),
                 foreground_muted: Rgb::new(189, 194, 214),
@@ -191,11 +287,13 @@ impl BuiltinTheme {
             Self::GruvboxDark => ThemePalette {
                 name: self.display_name(),
                 id: self.id(),
-                background: Rgb::new(29, 32, 33),
-                surface: Rgb::new(40, 40, 40),
-                surface_elevated: Rgb::new(50, 48, 47),
+                background: Rgb::new(24, 26, 27),
+                surface: Rgb::new(36, 36, 36),
+                surface_elevated: Rgb::new(46, 44, 43),
                 surface_highest: Rgb::new(60, 56, 54),
-                border: Rgb::new(80, 73, 69),
+                orb_primary: Rgb::new(112, 74, 24),
+                orb_secondary: Rgb::new(56, 84, 72),
+                border: Rgb::new(78, 72, 68),
                 border_focused: Rgb::new(250, 189, 47),
                 foreground: Rgb::new(235, 219, 178),
                 foreground_muted: Rgb::new(189, 174, 147),
@@ -230,7 +328,7 @@ impl BuiltinTheme {
     }
 }
 
-/// Complete theme color tokens derived for Material surfaces and ANSI output.
+/// Complete theme color tokens derived for Liquid Glass surfaces and ANSI output.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ThemePalette {
     pub id: &'static str,
@@ -239,6 +337,8 @@ pub struct ThemePalette {
     pub surface: Rgb,
     pub surface_elevated: Rgb,
     pub surface_highest: Rgb,
+    pub orb_primary: Rgb,
+    pub orb_secondary: Rgb,
     pub border: Rgb,
     pub border_focused: Rgb,
     pub foreground: Rgb,
@@ -286,10 +386,10 @@ impl Default for WindowConfig {
     fn default() -> Self {
         Self {
             opacity: 1.0,
-            padding_x: 14.0,
-            padding_y: 10.0,
-            block_spacing: 10.0,
-            corner_radius: 10.0,
+            padding_x: 18.0,
+            padding_y: 12.0,
+            block_spacing: 12.0,
+            corner_radius: 14.0,
         }
     }
 }
@@ -356,7 +456,7 @@ pub struct AppConfig {
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
-            theme: BuiltinTheme::TokyoNight.id().to_string(),
+            theme: BuiltinTheme::Obsidian.id().to_string(),
             font: FontConfig::default(),
             window: WindowConfig::default(),
             shell: ShellConfig::default(),
@@ -366,12 +466,12 @@ impl Default for AppConfig {
 }
 
 impl AppConfig {
-    /// Returns the resolved built-in theme, defaulting to Tokyo Night if invalid.
+    /// Returns the resolved built-in theme, defaulting to Obsidian if invalid.
     pub fn resolved_theme(&self) -> BuiltinTheme {
-        BuiltinTheme::from_name(&self.theme).unwrap_or(BuiltinTheme::TokyoNight)
+        BuiltinTheme::from_name(&self.theme).unwrap_or(BuiltinTheme::Obsidian)
     }
 
-    /// Returns the active Material-adapted color palette.
+    /// Returns the active Liquid Glass / Material color palette.
     pub fn palette(&self) -> ThemePalette {
         self.resolved_theme().palette()
     }
@@ -380,7 +480,7 @@ impl AppConfig {
     pub fn validate(&self) -> Result<(), String> {
         if BuiltinTheme::from_name(&self.theme).is_none() {
             return Err(format!(
-                "Unknown theme '{}'. Valid themes: tokyo-night, catppuccin-mocha, dracula, gruvbox-dark",
+                "Unknown theme '{}'. Valid themes: obsidian, tokyo-night, teal-frost, catppuccin-mocha, dracula, gruvbox-dark",
                 self.theme
             ));
         }
@@ -427,7 +527,7 @@ impl AppConfig {
         let body = toml::to_string_pretty(self)?;
         Ok(format!(
             "# Material Terminal Configuration\n\
-             # Available themes: \"tokyo-night\", \"catppuccin-mocha\", \"dracula\", \"gruvbox-dark\"\n\
+             # Available themes: \"obsidian\", \"tokyo-night\", \"teal-frost\", \"catppuccin-mocha\", \"dracula\", \"gruvbox-dark\"\n\
              # Edits are hot-reloaded live. Invalid syntax preserves the previous working config.\n\n\
              {body}"
         ))
@@ -687,7 +787,7 @@ mod tests {
         assert!(cfg_path.exists());
 
         let cfg = manager.current();
-        assert_eq!(cfg.resolved_theme(), BuiltinTheme::TokyoNight);
+        assert_eq!(cfg.resolved_theme(), BuiltinTheme::Obsidian);
 
         for theme in BuiltinTheme::ALL {
             let mut copy = cfg.clone();
@@ -723,12 +823,12 @@ mod tests {
 
         let (manager, warning) = ConfigManager::load_or_create_at(cfg_path.clone(), None);
         assert!(warning.is_none());
-        assert_eq!(manager.current().resolved_theme(), BuiltinTheme::TokyoNight);
+        assert_eq!(manager.current().resolved_theme(), BuiltinTheme::Obsidian);
 
         // Give macOS FSEvents a brief moment to register the directory watch.
         std::thread::sleep(Duration::from_millis(200));
 
-        // 1. Write invalid TOML syntax -> should emit ReloadError and keep TokyoNight.
+        // 1. Write invalid TOML syntax -> should emit ReloadError and keep Obsidian.
         fs::write(&cfg_path, "theme = \"dracula\n[broken_toml").unwrap();
 
         let mut saw_error = false;
@@ -744,7 +844,7 @@ mod tests {
             std::thread::sleep(Duration::from_millis(80));
         }
         assert!(saw_error, "expected ReloadError on broken TOML");
-        assert_eq!(manager.current().resolved_theme(), BuiltinTheme::TokyoNight);
+        assert_eq!(manager.current().resolved_theme(), BuiltinTheme::Obsidian);
 
         // 2. Write valid TOML -> should emit Reloaded with Dracula and update current().
         std::thread::sleep(Duration::from_millis(100));
