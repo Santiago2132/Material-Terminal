@@ -28,7 +28,7 @@ fn live_zsh_pty_drives_command_blocks_truecolor_cwd_and_history() {
     let canonical_work = std::fs::canonicalize(&work_dir).unwrap();
 
     let cfg = AppConfig::default();
-    assert_eq!(cfg.resolved_theme(), BuiltinTheme::TokyoNight);
+    assert_eq!(cfg.resolved_theme(), BuiltinTheme::Obsidian);
 
     let history = HistoryStore::open_at(&state_dir.join("history.sqlite")).unwrap();
     let pty = PtySession::spawn(

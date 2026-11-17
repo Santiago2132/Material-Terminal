@@ -3,10 +3,10 @@
 
 use crate::config::BuiltinTheme;
 use crate::history::HistoryEntry;
-use crate::ui::theme::MaterialTheme;
+use crate::ui::theme::{MaterialTheme, paint_specular_highlight};
 use egui::{
-    Align, Area, Color32, Context, CornerRadius, Frame, Id, Key, Layout, Margin, Modifiers, Order,
-    Pos2, RichText, ScrollArea, Sense, Stroke, TextEdit,
+    Align, Area, Color32, Context, CornerRadius, FontId, Frame, Id, Key, Layout, Margin, Modifiers,
+    Order, Pos2, RichText, ScrollArea, Sense, Stroke, TextEdit,
 };
 use fuzzy_matcher::FuzzyMatcher;
 use fuzzy_matcher::skim::SkimMatcherV2;
@@ -244,28 +244,41 @@ impl CommandPaletteState {
             return None;
         }
 
-        let modal_width = (screen.width() * 0.62).clamp(380.0, 660.0);
-        let modal_pos = Pos2::new(screen.center().x - modal_width * 0.5, screen.top() + 58.0);
+        let modal_width = (screen.width() * 0.58).clamp(380.0, 560.0);
+        let modal_pos = Pos2::new(
+            screen.center().x - modal_width * 0.5,
+            screen.top() + (screen.height() * 0.12).max(58.0),
+        );
 
-        Area::new(Id::NULL.with("command_palette_modal"))
+        let modal_bg = Color32::from_rgba_unmultiplied(
+            theme.surface_elevated.r(),
+            theme.surface_elevated.g(),
+            theme.surface_elevated.b(),
+            242,
+        );
+
+        let modal_resp = Area::new(Id::NULL.with("command_palette_modal"))
             .order(Order::Foreground)
             .fixed_pos(modal_pos)
             .show(ctx, |ui| {
                 Frame::new()
-                    .fill(theme.surface_elevated)
-                    .stroke(Stroke::new(1.2, theme.border_focused))
-                    .corner_radius(CornerRadius::same(14))
-                    .inner_margin(Margin::same(12))
+                    .fill(modal_bg)
+                    .stroke(Stroke::new(1.0, theme.glass_border))
+                    .corner_radius(CornerRadius::same(16))
+                    .inner_margin(Margin::same(14))
                     .show(ui, |ui| {
-                        ui.set_width(modal_width - 24.0);
+                        ui.set_width(modal_width - 28.0);
 
                         let input_id = Id::NULL.with("command_palette_input");
                         let resp = ui.add(
                             TextEdit::singleline(&mut self.query)
                                 .id(input_id)
                                 .desired_width(f32::INFINITY)
+                                .frame(Frame::NONE)
+                                .font(FontId::proportional(14.0))
+                                .text_color(Color32::WHITE)
                                 .hint_text(
-                                    RichText::new("Type a command, theme, or history query...")
+                                    RichText::new("Search actions, themes, or command history...")
                                         .color(theme.foreground_subtle),
                                 ),
                         );
@@ -277,9 +290,9 @@ impl CommandPaletteState {
                             self.selected_idx = 0;
                         }
 
-                        ui.add_space(8.0);
+                        ui.add_space(10.0);
                         ui.separator();
-                        ui.add_space(6.0);
+                        ui.add_space(8.0);
 
                         if items.is_empty() {
                             ui.label(
@@ -290,7 +303,7 @@ impl CommandPaletteState {
                         }
 
                         ScrollArea::vertical()
-                            .max_height((screen.height() * 0.52).max(200.0))
+                            .max_height((screen.height() * 0.48).max(200.0))
                             .show(ui, |ui| {
                                 for (idx, item) in items.iter().take(40).enumerate() {
                                     let is_selected = idx == self.selected_idx;
@@ -300,7 +313,7 @@ impl CommandPaletteState {
                                         Color32::TRANSPARENT
                                     };
                                     let row_stroke = if is_selected {
-                                        Stroke::new(1.0, theme.border_focused)
+                                        Stroke::new(1.0, theme.accent)
                                     } else {
                                         Stroke::NONE
                                     };
@@ -308,15 +321,17 @@ impl CommandPaletteState {
                                     let row_resp = Frame::new()
                                         .fill(row_fill)
                                         .stroke(row_stroke)
-                                        .corner_radius(CornerRadius::same(8))
-                                        .inner_margin(Margin::symmetric(10, 6))
+                                        .corner_radius(CornerRadius::same(10))
+                                        .inner_margin(Margin::symmetric(12, 8))
                                         .show(ui, |ui| {
                                             ui.set_min_width(ui.available_width());
                                             ui.horizontal(|ui| {
                                                 Frame::new()
-                                                    .fill(theme.surface_highest)
+                                                    .fill(Color32::from_rgba_unmultiplied(
+                                                        255, 255, 255, 16,
+                                                    ))
                                                     .corner_radius(CornerRadius::same(5))
-                                                    .inner_margin(Margin::symmetric(6, 2))
+                                                    .inner_margin(Margin::symmetric(7, 2))
                                                     .show(ui, |ui| {
                                                         ui.label(
                                                             RichText::new(item.category)
@@ -342,12 +357,34 @@ impl CommandPaletteState {
                                                     ui.with_layout(
                                                         Layout::right_to_left(Align::Center),
                                                         |ui| {
-                                                            ui.label(
-                                                                RichText::new(&item.shortcut)
-                                                                    .small()
-                                                                    .monospace()
-                                                                    .color(theme.foreground_subtle),
-                                                            );
+                                                            Frame::new()
+                                                                .fill(
+                                                                    Color32::from_rgba_unmultiplied(
+                                                                        255, 255, 255, 14,
+                                                                    ),
+                                                                )
+                                                                .stroke(Stroke::new(
+                                                                    1.0,
+                                                                    theme.glass_border_subtle,
+                                                                ))
+                                                                .corner_radius(CornerRadius::same(
+                                                                    6,
+                                                                ))
+                                                                .inner_margin(Margin::symmetric(
+                                                                    8, 2,
+                                                                ))
+                                                                .show(ui, |ui| {
+                                                                    ui.label(
+                                                                        RichText::new(
+                                                                            &item.shortcut,
+                                                                        )
+                                                                        .small()
+                                                                        .monospace()
+                                                                        .color(
+                                                                            theme.foreground_muted,
+                                                                        ),
+                                                                    );
+                                                                });
                                                         },
                                                     );
                                                 }
@@ -369,6 +406,13 @@ impl CommandPaletteState {
                             });
                     });
             });
+
+        paint_specular_highlight(
+            &ctx.layer_painter(modal_resp.response.layer_id),
+            modal_resp.response.rect,
+            16.0,
+            theme.glass_highlight,
+        );
 
         if chosen.is_some() {
             self.close();
