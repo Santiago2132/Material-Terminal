@@ -90,7 +90,10 @@ pub fn prepare_shell_launch_in(
                 "MATERIAL_WRAPPER_ZDOTDIR".to_string(),
                 zdotdir.to_string_lossy().into_owned(),
             ));
-            env.push(("ZDOTDIR".to_string(), zdotdir.to_string_lossy().into_owned()));
+            env.push((
+                "ZDOTDIR".to_string(),
+                zdotdir.to_string_lossy().into_owned(),
+            ));
 
             let args = if user_args.is_empty() {
                 vec!["-l".to_string(), "-i".to_string()]
@@ -234,8 +237,12 @@ unset MATERIAL_WRAPPER_ZDOTDIR MATERIAL_ORIG_ZDOTDIR MATERIAL_USER_ZDOTDIR
 
 fn write_bash_wrapper(data_dir: &Path) -> Result<PathBuf, String> {
     let dir = data_dir.join("shell").join("bash");
-    fs::create_dir_all(&dir)
-        .map_err(|e| format!("Failed to create bash hook directory {}: {e}", dir.display()))?;
+    fs::create_dir_all(&dir).map_err(|e| {
+        format!(
+            "Failed to create bash hook directory {}: {e}",
+            dir.display()
+        )
+    })?;
 
     let bashrc = r#"# Material Terminal non-invasive bash integration (OSC 133 + OSC 7)
 if [[ -z "${MATERIAL_SKIP_USER_RC:-}" ]]; then

@@ -65,7 +65,11 @@ impl CommandPaletteState {
         self.just_opened = false;
     }
 
-    fn build_items(&self, active_theme: BuiltinTheme, history: &[HistoryEntry]) -> Vec<PaletteItem> {
+    fn build_items(
+        &self,
+        active_theme: BuiltinTheme,
+        history: &[HistoryEntry],
+    ) -> Vec<PaletteItem> {
         let mut items = vec![
             PaletteItem {
                 title: "Split Pane Vertically (Side by Side)".to_string(),
@@ -125,7 +129,8 @@ impl CommandPaletteState {
             },
             PaletteItem {
                 title: "Open config.toml".to_string(),
-                subtitle: "Edit ~/.config/material-terminal/config.toml (live hot-reload)".to_string(),
+                subtitle: "Edit ~/.config/material-terminal/config.toml (live hot-reload)"
+                    .to_string(),
                 shortcut: "Cmd+,".to_string(),
                 category: "Config",
                 action: PaletteAction::OpenConfig,
@@ -133,7 +138,11 @@ impl CommandPaletteState {
         ];
 
         for theme in BuiltinTheme::ALL {
-            let active_badge = if theme == active_theme { " (active)" } else { "" };
+            let active_badge = if theme == active_theme {
+                " (active)"
+            } else {
+                ""
+            };
             items.push(PaletteItem {
                 title: format!("Theme: {}{}", theme.display_name(), active_badge),
                 subtitle: format!("Switch Material palette to {}", theme.id()),
@@ -224,11 +233,8 @@ impl CommandPaletteState {
             .fixed_pos(screen.min)
             .show(ctx, |ui| {
                 let (rect, resp) = ui.allocate_exact_size(screen.size(), Sense::click());
-                ui.painter().rect_filled(
-                    rect,
-                    CornerRadius::ZERO,
-                    Color32::from_black_alpha(120),
-                );
+                ui.painter()
+                    .rect_filled(rect, CornerRadius::ZERO, Color32::from_black_alpha(120));
                 if resp.clicked() {
                     self.close();
                 }
@@ -239,10 +245,7 @@ impl CommandPaletteState {
         }
 
         let modal_width = (screen.width() * 0.62).clamp(380.0, 660.0);
-        let modal_pos = Pos2::new(
-            screen.center().x - modal_width * 0.5,
-            screen.top() + 58.0,
-        );
+        let modal_pos = Pos2::new(screen.center().x - modal_width * 0.5, screen.top() + 58.0);
 
         Area::new(Id::NULL.with("command_palette_modal"))
             .order(Order::Foreground)
@@ -386,7 +389,10 @@ mod tests {
         };
         let items = palette.build_items(BuiltinTheme::TokyoNight, &[]);
         assert!(!items.is_empty());
-        assert_eq!(items[0].action, PaletteAction::SetTheme(BuiltinTheme::CatppuccinMocha));
+        assert_eq!(
+            items[0].action,
+            PaletteAction::SetTheme(BuiltinTheme::CatppuccinMocha)
+        );
 
         palette.query = "cargobld".to_string();
         let hist = vec![HistoryEntry {

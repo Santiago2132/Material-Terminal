@@ -9,9 +9,7 @@ use crate::ui::block_view::BlockAction;
 use crate::ui::command_palette::{CommandPaletteState, PaletteAction};
 use crate::ui::input_editor::{InputAction, InputEditorState, compact_home_path};
 use crate::ui::theme::{MaterialTheme, apply_configured_font};
-use crate::ui::{
-    render_notifications, render_pane_tree, render_search_bar, render_top_bar,
-};
+use crate::ui::{render_notifications, render_pane_tree, render_search_bar, render_top_bar};
 use egui::{CentralPanel, Context, Frame, Key, Modifiers, ViewportCommand};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -180,7 +178,8 @@ impl MaterialTerminalApp {
             ctx.request_repaint();
         });
 
-        let (config_manager, startup_err) = ConfigManager::load_or_create_default(Some(wake_cb.clone()));
+        let (config_manager, startup_err) =
+            ConfigManager::load_or_create_default(Some(wake_cb.clone()));
         let config = config_manager.current();
 
         let history = HistoryStore::open_default().ok();
@@ -245,12 +244,8 @@ impl MaterialTerminalApp {
 
         match PtySession::spawn(pty_cfg, Some(self.wake_cb.clone())) {
             Ok(pty) => {
-                let engine = TerminalEngine::new(
-                    initial_dir.clone(),
-                    100,
-                    32,
-                    self.config.shell.max_blocks,
-                );
+                let engine =
+                    TerminalEngine::new(initial_dir.clone(), 100, 32, self.config.shell.max_blocks);
                 self.git_detector.request(pane_id, None, initial_dir);
                 self.panes.insert(
                     pane_id,
@@ -273,13 +268,11 @@ impl MaterialTerminalApp {
     }
 
     pub fn new_tab(&mut self) {
-        let start_dir = self
-            .active_pane_dir()
-            .unwrap_or_else(|| {
-                dirs::home_dir()
-                    .or_else(|| std::env::current_dir().ok())
-                    .unwrap_or_else(|| PathBuf::from("/"))
-            });
+        let start_dir = self.active_pane_dir().unwrap_or_else(|| {
+            dirs::home_dir()
+                .or_else(|| std::env::current_dir().ok())
+                .unwrap_or_else(|| PathBuf::from("/"))
+        });
 
         if let Some(pane_id) = self.spawn_pane(start_dir) {
             let tab_id = self.alloc_id();
@@ -628,8 +621,7 @@ impl MaterialTerminalApp {
                             pane.exited = Some(code.unwrap_or(0));
                         }
                         PtyEvent::Error(err) => {
-                            self.toast =
-                                Some((err, Instant::now() + Duration::from_secs(4)));
+                            self.toast = Some((err, Instant::now() + Duration::from_secs(4)));
                         }
                     }
                 }
@@ -721,7 +713,8 @@ impl MaterialTerminalApp {
                 Key::Num9,
             ];
             for (idx, k) in num_keys.into_iter().enumerate() {
-                if idx < self.tabs.len() && ctx.input_mut(|i| i.consume_key(Modifiers::COMMAND, k)) {
+                if idx < self.tabs.len() && ctx.input_mut(|i| i.consume_key(Modifiers::COMMAND, k))
+                {
                     self.active_tab = idx;
                     self.focus_active_pane_editor();
                     break;
@@ -771,10 +764,7 @@ impl eframe::App for MaterialTerminalApp {
         }
 
         // Request periodic repaint if any block is running (to animate live timer) or toast is active.
-        let has_running = self
-            .panes
-            .values()
-            .any(|p| p.engine.has_running_block());
+        let has_running = self.panes.values().any(|p| p.engine.has_running_block());
         if has_running || self.toast.is_some() {
             ctx.request_repaint_after(Duration::from_millis(120));
         }
@@ -801,8 +791,12 @@ impl eframe::App for MaterialTerminalApp {
                     })
                     .map(|b| b.id)
                     .collect();
-                ids.get(self.search.active_match_idx.min(ids.len().saturating_sub(1)))
-                    .copied()
+                ids.get(
+                    self.search
+                        .active_match_idx
+                        .min(ids.len().saturating_sub(1)),
+                )
+                .copied()
             })
         } else {
             None

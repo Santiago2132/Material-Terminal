@@ -185,12 +185,8 @@ pub fn render_block_card(
 
         // Command text line
         ui.add_space(3.0);
-        let cmd_job = build_highlighted_command_job(
-            &block.command_text,
-            font_size,
-            theme,
-            search_query,
-        );
+        let cmd_job =
+            build_highlighted_command_job(&block.command_text, font_size, theme, search_query);
         ui.add(Label::new(cmd_job).selectable(true));
 
         // Output body
@@ -216,13 +212,8 @@ pub fn render_block_card(
             let visible = block.visible_lines();
             if !visible.is_empty() {
                 ui.add_space(6.0);
-                let out_job = build_output_layout_job(
-                    visible,
-                    theme,
-                    font_size,
-                    line_height,
-                    search_query,
-                );
+                let out_job =
+                    build_output_layout_job(visible, theme, font_size, line_height, search_query);
                 ui.add(Label::new(out_job).selectable(true));
             }
         }

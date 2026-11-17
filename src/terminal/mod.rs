@@ -607,7 +607,11 @@ pub fn encode_egui_key(
         return Some(vec![ctrl_byte]);
     }
 
-    let csi_prefix = if application_cursor_keys { "\x1bO" } else { "\x1b[" };
+    let csi_prefix = if application_cursor_keys {
+        "\x1bO"
+    } else {
+        "\x1b["
+    };
 
     let seq: Option<&[u8]> = match key {
         Key::Enter => Some(b"\r"),
@@ -626,8 +630,16 @@ pub fn encode_egui_key(
         Key::ArrowLeft => {
             return Some(format!("{csi_prefix}D").into_bytes());
         }
-        Key::Home => Some(if application_cursor_keys { b"\x1bOH" } else { b"\x1b[H" }),
-        Key::End => Some(if application_cursor_keys { b"\x1bOF" } else { b"\x1b[F" }),
+        Key::Home => Some(if application_cursor_keys {
+            b"\x1bOH"
+        } else {
+            b"\x1b[H"
+        }),
+        Key::End => Some(if application_cursor_keys {
+            b"\x1bOF"
+        } else {
+            b"\x1b[F"
+        }),
         Key::PageUp => Some(b"\x1b[5~"),
         Key::PageDown => Some(b"\x1b[6~"),
         Key::Insert => Some(b"\x1b[2~"),
@@ -719,10 +731,7 @@ mod tests {
         );
 
         assert_eq!(grid.row_cells(1)[4].ch, 'V');
-        assert_eq!(
-            grid.row_cells(1)[4].style.fg,
-            TermColor::Rgb(255, 120, 40)
-        );
+        assert_eq!(grid.row_cells(1)[4].style.fg, TermColor::Rgb(255, 120, 40));
         assert!(grid.row_cells(1)[4].style.bold);
         assert_eq!(grid.row_cells(1)[6].ch, 'M');
         assert_eq!(grid.cursor(), (1, 7));

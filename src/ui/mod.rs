@@ -150,7 +150,11 @@ pub fn render_top_bar(ui: &mut Ui, app: &mut MaterialTerminalApp, theme: &Materi
                 }
 
                 if ui
-                    .small_button(RichText::new("Split ⊟").small().color(theme.foreground_muted))
+                    .small_button(
+                        RichText::new("Split ⊟")
+                            .small()
+                            .color(theme.foreground_muted),
+                    )
                     .on_hover_text("Split Horizontally (Cmd+Shift+D)")
                     .clicked()
                 {
@@ -158,7 +162,11 @@ pub fn render_top_bar(ui: &mut Ui, app: &mut MaterialTerminalApp, theme: &Materi
                 }
 
                 if ui
-                    .small_button(RichText::new("Split ⊞").small().color(theme.foreground_muted))
+                    .small_button(
+                        RichText::new("Split ⊞")
+                            .small()
+                            .color(theme.foreground_muted),
+                    )
                     .on_hover_text("Split Vertically (Cmd+D)")
                     .clicked()
                 {
@@ -185,9 +193,11 @@ pub fn render_notifications(ui: &mut Ui, app: &mut MaterialTerminalApp, theme: &
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
                     ui.label(
-                        RichText::new(format!("Config Error (previous valid config active): {err}"))
-                            .small()
-                            .color(theme.error),
+                        RichText::new(format!(
+                            "Config Error (previous valid config active): {err}"
+                        ))
+                        .small()
+                        .color(theme.error),
                     );
                     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                         if ui.small_button("Dismiss").clicked() {
@@ -283,8 +293,8 @@ pub fn render_search_bar(
                         .color(theme.foreground_muted),
                 );
 
-                let enter_next =
-                    resp.has_focus() && ui.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Enter));
+                let enter_next = resp.has_focus()
+                    && ui.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Enter));
                 if !match_ids.is_empty()
                     && (ui.small_button("Prev").clicked()
                         || (resp.has_focus()
@@ -371,27 +381,19 @@ pub fn render_pane_tree(
                         Pos2::new(r1.right(), rect.top()),
                         Pos2::new(r1.right() + gap, rect.bottom()),
                     );
-                    let r2 = Rect::from_min_max(
-                        Pos2::new(handle.right(), rect.top()),
-                        rect.max,
-                    );
+                    let r2 = Rect::from_min_max(Pos2::new(handle.right(), rect.top()), rect.max);
                     (r1, handle, r2)
                 }
                 SplitAxis::Horizontal => {
                     let usable_h = (rect.height() - gap).max(40.0);
                     let first_h = (usable_h * *ratio).clamp(80.0, usable_h - 80.0);
-                    let r1 = Rect::from_min_max(
-                        rect.min,
-                        Pos2::new(rect.right(), rect.top() + first_h),
-                    );
+                    let r1 =
+                        Rect::from_min_max(rect.min, Pos2::new(rect.right(), rect.top() + first_h));
                     let handle = Rect::from_min_max(
                         Pos2::new(rect.left(), r1.bottom()),
                         Pos2::new(rect.right(), r1.bottom() + gap),
                     );
-                    let r2 = Rect::from_min_max(
-                        Pos2::new(rect.left(), handle.bottom()),
-                        rect.max,
-                    );
+                    let r2 = Rect::from_min_max(Pos2::new(rect.left(), handle.bottom()), rect.max);
                     (r1, handle, r2)
                 }
             };
@@ -407,7 +409,11 @@ pub fn render_pane_tree(
             );
 
             // Draggable Material divider
-            let handle_id = ui.make_persistent_id(("split_handle", first_rect.min.x as i32, first_rect.min.y as i32));
+            let handle_id = ui.make_persistent_id((
+                "split_handle",
+                first_rect.min.x as i32,
+                first_rect.min.y as i32,
+            ));
             let resp = ui.interact(handle_rect, handle_id, Sense::drag());
             if resp.hovered() || resp.dragged() {
                 let cursor = match axis {
@@ -471,10 +477,7 @@ fn render_single_pane(
 ) {
     // Clicking anywhere inside an unfocused pane focuses it.
     let pointer_pressed_inside = ui.input(|i| {
-        i.pointer.primary_clicked()
-            && i.pointer
-                .interact_pos()
-                .is_some_and(|p| rect.contains(p))
+        i.pointer.primary_clicked() && i.pointer.interact_pos().is_some_and(|p| rect.contains(p))
     });
     if pointer_pressed_inside && !is_focused {
         app.set_focused_pane(pane_id);
@@ -728,7 +731,9 @@ fn render_alt_screen(
             let bg_rgb = if cell.style.inverse {
                 cell.style.fg.resolve_fg(&theme.palette)
             } else {
-                cell.style.bg.resolve_bg(&theme.palette, theme.palette.background)
+                cell.style
+                    .bg
+                    .resolve_bg(&theme.palette, theme.palette.background)
             };
             let bg_c32 = rgb_opaque(bg_rgb);
             let start_c = c;
@@ -741,7 +746,9 @@ fn render_alt_screen(
                 let next_bg = if next.style.inverse {
                     next.style.fg.resolve_fg(&theme.palette)
                 } else {
-                    next.style.bg.resolve_bg(&theme.palette, theme.palette.background)
+                    next.style
+                        .bg
+                        .resolve_bg(&theme.palette, theme.palette.background)
                 };
                 if rgb_opaque(next_bg) != bg_c32 {
                     break;
@@ -792,7 +799,12 @@ fn render_alt_screen(
         painter.rect_filled(
             cursor_rect,
             CornerRadius::same(1),
-            Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 150),
+            Color32::from_rgba_unmultiplied(
+                theme.accent.r(),
+                theme.accent.g(),
+                theme.accent.b(),
+                150,
+            ),
         );
     }
 
@@ -825,7 +837,11 @@ fn render_alt_screen(
                         ..
                     } => {
                         // Do not intercept global app shortcuts (`Cmd+...` on macOS)
-                        if modifiers.mac_cmd || (cfg!(not(target_os = "macos")) && modifiers.command && modifiers.shift) {
+                        if modifiers.mac_cmd
+                            || (cfg!(not(target_os = "macos"))
+                                && modifiers.command
+                                && modifiers.shift)
+                        {
                             continue;
                         }
                         if let Some(seq) = encode_egui_key(*key, *modifiers, app_cursor) {
