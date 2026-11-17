@@ -60,7 +60,7 @@ For architectural invariants and contribution guidelines, see [VISION.md](VISION
 On first launch, Material Terminal generates `~/.config/material-terminal/config.toml` automatically. Edits take effect immediately on save:
 
 ```toml
-theme = "tokyo-night" # "tokyo-night" | "catppuccin-mocha" | "dracula" | "gruvbox-dark"
+theme = "obsidian" # "obsidian" | "tokyo-night" | "teal-frost" | "catppuccin-mocha" | "dracula" | "gruvbox-dark"
 
 [font]
 family = "JetBrains Mono"
@@ -69,10 +69,10 @@ line_height = 1.38
 
 [window]
 opacity = 1.0
-padding_x = 14.0
-padding_y = 10.0
-block_spacing = 10.0
-corner_radius = 10.0
+padding_x = 18.0
+padding_y = 12.0
+block_spacing = 12.0
+corner_radius = 14.0
 
 [shell]
 # program = "/bin/zsh"
