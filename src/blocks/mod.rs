@@ -573,7 +573,7 @@ impl Perform for EngineState {
     }
 
     fn csi_dispatch(&mut self, params: &Params, intermediates: &[u8], _ignore: bool, action: char) {
-        if intermediates == [b'?'] && (action == 'h' || action == 'l') {
+        if intermediates == *b"?" && (action == 'h' || action == 'l') {
             let entering = action == 'h';
             let mut toggled_alt = false;
             for sub in params.iter() {
@@ -633,12 +633,12 @@ impl Perform for EngineState {
                     .next()
                     .and_then(|s| s.first().copied())
                     .unwrap_or(0);
-                if mode == 2 || mode == 3 {
-                    if let Some(block) = self.active_block_mut() {
-                        block.output_lines.clear();
-                        block.output_lines.push(OutputLine::default());
-                        block.active_line_idx = 0;
-                    }
+                if (mode == 2 || mode == 3)
+                    && let Some(block) = self.active_block_mut()
+                {
+                    block.output_lines.clear();
+                    block.output_lines.push(OutputLine::default());
+                    block.active_line_idx = 0;
                 }
             }
             _ => {}

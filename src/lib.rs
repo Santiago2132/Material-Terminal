@@ -1,3 +1,4 @@
+pub mod app;
 pub mod blocks;
 pub mod config;
 pub mod history;

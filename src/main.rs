@@ -1,20 +1,21 @@
-use material_terminal::config::ConfigManager;
-use material_terminal::pty::{PtySession, PtySpawnConfig};
+use eframe::egui;
+use material_terminal::app::MaterialTerminalApp;
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let (cfg_mgr, warning) = ConfigManager::load_or_create_default(None);
-    if let Some(msg) = warning {
-        eprintln!("Config warning: {msg}");
-    }
-    let cfg = cfg_mgr.current();
-    let _pty = PtySession::spawn(
-        PtySpawnConfig {
-            program: cfg.shell.program.clone(),
-            args: cfg.shell.args.clone(),
-            enable_osc133_hooks: cfg.shell.enable_osc133_hooks,
-            ..PtySpawnConfig::default()
-        },
-        None,
-    )?;
-    Ok(())
+fn main() -> eframe::Result {
+    let options = eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default()
+            .with_app_id("material-terminal")
+            .with_title("Material Terminal")
+            .with_inner_size([1160.0, 740.0])
+            .with_min_inner_size([560.0, 360.0])
+            .with_transparent(true),
+        renderer: eframe::Renderer::Wgpu,
+        ..Default::default()
+    };
+
+    eframe::run_native(
+        "Material Terminal",
+        options,
+        Box::new(|cc| Ok(Box::new(MaterialTerminalApp::new(cc)))),
+    )
 }

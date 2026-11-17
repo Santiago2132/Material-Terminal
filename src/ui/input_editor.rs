@@ -429,8 +429,10 @@ mod tests {
 
     #[test]
     fn history_navigation_preserves_draft_and_accepts_ghost() {
-        let mut editor = InputEditorState::default();
-        editor.buffer = "git st".to_string();
+        let mut editor = InputEditorState {
+            buffer: "git st".to_string(),
+            ..Default::default()
+        };
         let history = vec!["cargo build".to_string(), "ls -la".to_string()];
 
         editor.step_history_up(&history);

@@ -423,7 +423,7 @@ impl AltScreenGrid {
                 .unwrap_or(0) as usize
         };
 
-        if intermediates == [b'?'] {
+        if intermediates == *b"?" {
             let set = action == 'h';
             if action == 'h' || action == 'l' {
                 for sub in params.iter() {
@@ -591,16 +591,20 @@ pub fn encode_egui_key(
     application_cursor_keys: bool,
 ) -> Option<Vec<u8>> {
     // Handle Ctrl+<letter> (e.g., Ctrl+C -> 0x03, Ctrl+D -> 0x04, Ctrl+L -> 0x0c)
-    if modifiers.ctrl && !modifiers.command && !modifiers.alt {
-        if let Some(ctrl_byte) = key_to_ctrl_byte(key) {
-            return Some(vec![ctrl_byte]);
-        }
+    if modifiers.ctrl
+        && !modifiers.command
+        && !modifiers.alt
+        && let Some(ctrl_byte) = key_to_ctrl_byte(key)
+    {
+        return Some(vec![ctrl_byte]);
     }
     #[cfg(target_os = "macos")]
-    if modifiers.ctrl && !modifiers.mac_cmd && !modifiers.alt {
-        if let Some(ctrl_byte) = key_to_ctrl_byte(key) {
-            return Some(vec![ctrl_byte]);
-        }
+    if modifiers.ctrl
+        && !modifiers.mac_cmd
+        && !modifiers.alt
+        && let Some(ctrl_byte) = key_to_ctrl_byte(key)
+    {
+        return Some(vec![ctrl_byte]);
     }
 
     let csi_prefix = if application_cursor_keys { "\x1bO" } else { "\x1b[" };

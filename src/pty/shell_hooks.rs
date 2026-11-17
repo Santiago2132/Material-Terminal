@@ -172,7 +172,7 @@ fi
 if [[ -z "${__MATERIAL_SHELL_HOOKS_LOADED:-}" ]]; then
   __MATERIAL_SHELL_HOOKS_LOADED=1
   __material_cmd_active=0
-  PROMPT_EOL_MARK=''
+  unsetopt PROMPT_SP 2>/dev/null || PROMPT_EOL_MARK=''
 
   autoload -Uz add-zsh-hook 2>/dev/null || true
 
