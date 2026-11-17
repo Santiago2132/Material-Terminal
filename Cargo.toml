@@ -1,0 +1,38 @@
+[package]
+name = "material-terminal"
+version = "0.1.0"
+edition = "2024"
+authors = ["Santiago Maldonado Rojas <santiagomaldonadorojas64@gmail.com>"]
+description = "A native GPU-accelerated, Warp-inspired block terminal with Material Design 3 clarity written in Rust"
+license = "MIT"
+repository = "https://github.com/Santiago2132/Material-Terminal"
+
+[dependencies]
+eframe = { version = "0.37", default-features = false, features = [
+    "accesskit",
+    "clipboard",
+    "default_fonts",
+    "links",
+    "system_fonts",
+    "wayland",
+    "wgpu",
+    "x11",
+] }
+egui = "0.37"
+portable-pty = "0.9"
+vte = "0.15"
+crossbeam-channel = "0.5"
+serde = { version = "1.0", features = ["derive"] }
+toml = "0.9"
+notify = "8.0"
+rusqlite = { version = "0.39", features = ["bundled"] }
+fuzzy-matcher = "0.3"
+dirs = "6.0"
+arboard = "3.7"
+unicode-width = "0.2"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = "symbols"
