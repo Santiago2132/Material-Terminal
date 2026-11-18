@@ -46,6 +46,8 @@ pub fn render_top_bar(ui: &mut Ui, app: &mut MaterialTerminalApp, theme: &Materi
         "Ctrl+Shift+P"
     };
 
+    // Tab pills / '+' button rects that must never start a native window drag.
+    let mut no_drag_rects: Vec<Rect> = Vec::new();
     ui.scope_builder(
         UiBuilder::new()
             .id_salt("material_top_bar_scope")
@@ -146,144 +148,37 @@ pub fn render_top_bar(ui: &mut Ui, app: &mut MaterialTerminalApp, theme: &Materi
                 app.split_focused_pane(SplitAxis::Vertical);
             }
 
-            // Remaining left space: scrollable tabs + '+' button
+            // Remaining left space: the tab strip. It spans the FULL titlebar height so the
+            // fixed-height rounded pills are vertically centered with clearance on both sides
+            // and are never sliced flat where the terminal workspace begins.
             let tabs_avail_w = ui.available_width().max(80.0);
-            let tabs_rect = Rect::from_min_size(
-                Pos2::new(content_rect.left(), content_rect.top()),
-                Vec2::new(tabs_avail_w, content_rect.height()),
+            let strip_rect = Rect::from_min_max(
+                Pos2::new(content_rect.left(), bar_rect.top()),
+                Pos2::new(
+                    (content_rect.left() + tabs_avail_w).min(content_rect.right()),
+                    bar_rect.bottom(),
+                ),
             );
-            ui.scope_builder(
-                UiBuilder::new()
-                    .id_salt("material_top_bar_tabs")
-                    .max_rect(tabs_rect)
-                    .layout(Layout::left_to_right(Align::Center)),
-                |ui| {
-                    ui.set_clip_rect(tabs_rect);
-                    ScrollArea::horizontal()
-                        .id_salt(Id::NULL.with("top_tabs_scroll"))
-                        .max_width(tabs_avail_w)
-                        .show(ui, |ui| {
-                            ui.horizontal(|ui| {
-                                ui.spacing_mut().item_spacing.x = 6.0;
-
-                                let mut switch_to: Option<usize> = None;
-                                let mut close_tab_idx: Option<usize> = None;
-
-                                for (idx, tab) in app.tabs.iter().enumerate() {
-                                    let is_active = idx == app.active_tab;
-                                    let title = app.tab_title(tab);
-                                    let badge = app.tab_shell_badge(tab);
-
-                                    let fill = if is_active {
-                                        Color32::from_rgba_unmultiplied(255, 255, 255, 22)
-                                    } else {
-                                        Color32::TRANSPARENT
-                                    };
-                                    let stroke = if is_active {
-                                        Stroke::new(1.0, theme.glass_border)
-                                    } else {
-                                        Stroke::new(1.0, Color32::TRANSPARENT)
-                                    };
-
-                                    let pill_resp = Frame::new()
-                                        .fill(fill)
-                                        .stroke(stroke)
-                                        .corner_radius(CornerRadius::same(10))
-                                        .inner_margin(Margin::symmetric(10, 3))
-                                        .show(ui, |ui| {
-                                            ui.horizontal(|ui| {
-                                                ui.spacing_mut().item_spacing.x = 6.0;
-                                                let label_color = if is_active {
-                                                    theme.foreground
-                                                } else {
-                                                    theme.foreground_muted
-                                                };
-                                                if ui
-                                                    .add(
-                                                        Button::new(
-                                                            RichText::new(title)
-                                                                .strong()
-                                                                .color(label_color),
-                                                        )
-                                                        .frame(false),
-                                                    )
-                                                    .clicked()
-                                                {
-                                                    switch_to = Some(idx);
-                                                }
-
-                                                Frame::new()
-                                                    .fill(theme.accent_soft)
-                                                    .corner_radius(CornerRadius::same(5))
-                                                    .inner_margin(Margin::symmetric(5, 1))
-                                                    .show(ui, |ui| {
-                                                        ui.label(
-                                                            RichText::new(badge)
-                                                                .small()
-                                                                .monospace()
-                                                                .color(theme.accent),
-                                                        );
-                                                    });
-
-                                                if app.tabs.len() > 1
-                                                    && ui
-                                                        .add(
-                                                            Button::new(
-                                                                RichText::new("x")
-                                                                    .small()
-                                                                    .color(theme.foreground_muted),
-                                                            )
-                                                            .fill(Color32::from_rgba_unmultiplied(
-                                                                255, 255, 255, 16,
-                                                            ))
-                                                            .corner_radius(CornerRadius::same(5))
-                                                            .min_size(Vec2::new(20.0, 20.0)),
-                                                        )
-                                                        .on_hover_text("Close tab")
-                                                        .clicked()
-                                                {
-                                                    close_tab_idx = Some(idx);
-                                                }
-                                            });
-                                        });
-
-                                    if is_active {
-                                        paint_specular_highlight(
-                                            ui.painter(),
-                                            pill_resp.response.rect,
-                                            10.0,
-                                            Color32::from_rgba_unmultiplied(255, 255, 255, 36),
-                                        );
-                                    }
-                                }
-
-                                if ui
-                                    .add(
-                                        Button::new(
-                                            RichText::new("+").strong().color(theme.accent),
-                                        )
-                                        .fill(Color32::from_rgba_unmultiplied(255, 255, 255, 14))
-                                        .stroke(Stroke::new(1.0, theme.glass_border_subtle))
-                                        .corner_radius(CornerRadius::same(8))
-                                        .min_size(Vec2::new(28.0, 26.0)),
-                                    )
-                                    .on_hover_text("New Tab")
-                                    .clicked()
-                                {
-                                    app.new_tab();
-                                }
-
-                                if let Some(idx) = switch_to {
-                                    app.active_tab = idx;
-                                    app.focus_active_pane_editor();
-                                }
-                                if let Some(idx) = close_tab_idx {
-                                    app.close_tab_at(idx);
-                                }
-                            });
-                        });
-                },
-            );
+            let tab_infos: Vec<TabPillInfo> = app
+                .tabs
+                .iter()
+                .enumerate()
+                .map(|(idx, tab)| TabPillInfo {
+                    title: app.tab_title(tab),
+                    badge: app.tab_shell_badge(tab),
+                    is_active: idx == app.active_tab,
+                })
+                .collect();
+            let strip = render_tab_strip(ui, strip_rect, &tab_infos, theme);
+            no_drag_rects = strip.interactive_rects.clone();
+            if strip.new_tab {
+                app.new_tab();
+            } else if let Some(idx) = strip.close_idx {
+                app.close_tab_at(idx);
+            } else if let Some(idx) = strip.switch_to {
+                app.active_tab = idx;
+                app.focus_active_pane_editor();
+            }
         },
     );
 
@@ -291,9 +186,9 @@ pub fn render_top_bar(ui: &mut Ui, app: &mut MaterialTerminalApp, theme: &Materi
     if !ui.ctx().egui_is_using_pointer() {
         let drag_press = ui.input(|i| {
             i.pointer.primary_pressed()
-                && i.pointer
-                    .press_origin()
-                    .is_some_and(|p| bar_rect.contains(p))
+                && i.pointer.press_origin().is_some_and(|p| {
+                    bar_rect.contains(p) && !no_drag_rects.iter().any(|r| r.contains(p))
+                })
         });
         if drag_press {
             ui.ctx().send_viewport_cmd(ViewportCommand::StartDrag);
@@ -320,6 +215,251 @@ pub fn render_top_bar(ui: &mut Ui, app: &mut MaterialTerminalApp, theme: &Materi
     );
     ui.allocate_rect(bar_rect, Sense::hover());
     bar_rect
+}
+
+/// Fixed height of a rounded tab pill. Inside the 46px titlebar this leaves 9px of clearance
+/// above and below, so the 10px rounded corners are never clipped by the workspace edge.
+pub(crate) const TAB_PILL_HEIGHT: f32 = 28.0;
+/// Corner radius of a tab pill (matches the mockup's `.tab { border-radius: 10px }`).
+const TAB_PILL_RADIUS: u8 = 10;
+/// Maximum number of characters shown in a tab title before ellipsizing.
+const TAB_TITLE_MAX_CHARS: usize = 24;
+
+/// Display data for one tab pill in the titlebar strip.
+pub(crate) struct TabPillInfo {
+    pub title: String,
+    pub badge: String,
+    pub is_active: bool,
+}
+
+/// User interactions and painted geometry produced by [`render_tab_strip`].
+#[derive(Default)]
+pub(crate) struct TabStripResponse {
+    pub switch_to: Option<usize>,
+    pub close_idx: Option<usize>,
+    pub new_tab: bool,
+    /// Full rect of every tab pill, in tab order.
+    pub pill_rects: Vec<Rect>,
+    /// Pills + '+' button: regions that must not trigger native window dragging.
+    pub interactive_rects: Vec<Rect>,
+}
+
+fn ellipsize(text: &str, max_chars: usize) -> String {
+    if text.chars().count() <= max_chars {
+        return text.to_string();
+    }
+    let mut out: String = text.chars().take(max_chars.saturating_sub(1)).collect();
+    out.push('…');
+    out
+}
+
+/// Paints the titlebar tab strip with deterministic geometry.
+///
+/// Every pill is painted directly as a single rounded shape (fill + stroke) of fixed height,
+/// vertically centered in `strip_rect`. No egui `Button`/`Frame` widgets are nested inside the
+/// pill, so no rectangular hover/focus frame can ever be drawn over the rounded tab, and long
+/// running-command titles (e.g. `▶ antigravity`) are ellipsized instead of overflowing.
+/// Overflowing tabs scroll horizontally with the mouse wheel / trackpad.
+pub(crate) fn render_tab_strip(
+    ui: &mut Ui,
+    strip_rect: Rect,
+    tabs: &[TabPillInfo],
+    theme: &MaterialTheme,
+) -> TabStripResponse {
+    let mut out = TabStripResponse::default();
+    if strip_rect.width() < 8.0 || strip_rect.height() < 8.0 {
+        return out;
+    }
+
+    let painter = ui.painter_at(strip_rect);
+    let pill_h = TAB_PILL_HEIGHT.min(strip_rect.height() - 6.0);
+    let pill_top = strip_rect.center().y - pill_h / 2.0;
+    let can_close = tabs.len() > 1;
+
+    let pad_x = 10.0;
+    let inner_gap = 6.0;
+    let pill_gap = 6.0;
+    let close_size = 18.0;
+    let plus_size = Vec2::new(28.0, 26.0);
+
+    let title_font = FontId::proportional(12.5);
+    let badge_font = FontId::monospace(10.5);
+
+    // Pre-measure every pill so the strip can be laid out and scrolled deterministically.
+    let measured: Vec<_> = tabs
+        .iter()
+        .map(|tab| {
+            let title_color = if tab.is_active {
+                theme.foreground
+            } else {
+                theme.foreground_muted
+            };
+            let title = painter.layout_no_wrap(
+                ellipsize(&tab.title, TAB_TITLE_MAX_CHARS),
+                title_font.clone(),
+                title_color,
+            );
+            let badge = painter.layout_no_wrap(tab.badge.clone(), badge_font.clone(), theme.accent);
+            let badge_w = badge.size().x + 10.0;
+            let mut width = pad_x + title.size().x + inner_gap + badge_w + pad_x;
+            if can_close {
+                width += inner_gap + close_size - 4.0;
+            }
+            (title, badge, badge_w, width)
+        })
+        .collect();
+
+    let content_w: f32 = measured.iter().map(|m| m.3 + pill_gap).sum::<f32>() + plus_size.x + 4.0;
+
+    // Horizontal scroll offset (persisted per strip).
+    let strip_id = Id::NULL.with("material_tab_strip");
+    let max_offset = (content_w - strip_rect.width()).max(0.0);
+    let mut offset: f32 = ui.data(|d| d.get_temp(strip_id)).unwrap_or(0.0);
+    let strip_hovered = ui.rect_contains_pointer(strip_rect);
+    if strip_hovered && max_offset > 0.0 {
+        let delta = ui.input(|i| i.smooth_scroll_delta());
+        offset -= delta.x + delta.y;
+    }
+    offset = offset.clamp(0.0, max_offset);
+    ui.data_mut(|d| d.insert_temp(strip_id, offset));
+
+    let mut x = strip_rect.left() + 2.0 - offset;
+    for (idx, (tab, (title, badge, badge_w, width))) in tabs.iter().zip(measured).enumerate() {
+        let rect = Rect::from_min_size(Pos2::new(x, pill_top), Vec2::new(width, pill_h));
+        x += width + pill_gap;
+        out.pill_rects.push(rect);
+        out.interactive_rects.push(rect);
+
+        let pill_resp = ui
+            .interact(rect, strip_id.with(("tab", idx)), Sense::click())
+            .on_hover_cursor(CursorIcon::PointingHand);
+        let close_rect = can_close.then(|| {
+            Rect::from_center_size(
+                Pos2::new(
+                    rect.right() - pad_x + 2.0 - close_size / 2.0,
+                    rect.center().y,
+                ),
+                Vec2::splat(close_size),
+            )
+        });
+        let close_resp = close_rect.map(|r| {
+            ui.interact(r, strip_id.with(("tab_close", idx)), Sense::click())
+                .on_hover_text("Close tab")
+        });
+        let close_hovered = close_resp.as_ref().is_some_and(|r| r.hovered());
+        let hovered = pill_resp.hovered() || close_hovered;
+
+        let fill = if tab.is_active {
+            Color32::from_rgba_unmultiplied(255, 255, 255, 22)
+        } else if hovered {
+            Color32::from_rgba_unmultiplied(255, 255, 255, 10)
+        } else {
+            Color32::TRANSPARENT
+        };
+        let stroke = if tab.is_active {
+            Stroke::new(1.0, theme.glass_border)
+        } else if hovered {
+            Stroke::new(1.0, theme.glass_border_subtle)
+        } else {
+            Stroke::NONE
+        };
+        painter.rect(
+            rect,
+            CornerRadius::same(TAB_PILL_RADIUS),
+            fill,
+            stroke,
+            StrokeKind::Inside,
+        );
+        if tab.is_active {
+            paint_specular_highlight(
+                &painter,
+                rect,
+                f32::from(TAB_PILL_RADIUS),
+                Color32::from_rgba_unmultiplied(255, 255, 255, 36),
+            );
+        }
+
+        // Title
+        let title_pos = Pos2::new(rect.left() + pad_x, rect.center().y - title.size().y / 2.0);
+        let title_w = title.size().x;
+        painter.galley(title_pos, title, theme.foreground);
+
+        // Shell badge
+        let badge_rect = Rect::from_min_size(
+            Pos2::new(
+                title_pos.x + title_w + inner_gap,
+                rect.center().y - (badge.size().y + 2.0) / 2.0,
+            ),
+            Vec2::new(badge_w, badge.size().y + 2.0),
+        );
+        painter.rect_filled(badge_rect, CornerRadius::same(5), theme.accent_soft);
+        let badge_pos = badge_rect.center() - badge.size() / 2.0;
+        painter.galley(badge_pos, badge, theme.accent);
+
+        // Close button (rounded, only highlighted on hover)
+        if let (Some(close_rect), Some(close_resp)) = (close_rect, close_resp.as_ref()) {
+            if close_hovered {
+                painter.rect_filled(
+                    close_rect,
+                    CornerRadius::same(5),
+                    Color32::from_rgba_unmultiplied(255, 255, 255, 26),
+                );
+            }
+            painter.text(
+                close_rect.center(),
+                egui::Align2::CENTER_CENTER,
+                "×",
+                FontId::proportional(13.0),
+                if close_hovered {
+                    theme.error
+                } else {
+                    theme.foreground_muted
+                },
+            );
+            if close_resp.clicked() {
+                out.close_idx = Some(idx);
+                continue;
+            }
+        }
+
+        if pill_resp.clicked() {
+            out.switch_to = Some(idx);
+        }
+    }
+
+    // '+' new tab button
+    let plus_rect = Rect::from_min_size(
+        Pos2::new(x, strip_rect.center().y - plus_size.y / 2.0),
+        plus_size,
+    );
+    out.interactive_rects.push(plus_rect);
+    let plus_resp = ui
+        .interact(plus_rect, strip_id.with("new_tab"), Sense::click())
+        .on_hover_cursor(CursorIcon::PointingHand)
+        .on_hover_text("New Tab");
+    painter.rect(
+        plus_rect,
+        CornerRadius::same(8),
+        if plus_resp.hovered() {
+            Color32::from_rgba_unmultiplied(255, 255, 255, 28)
+        } else {
+            Color32::from_rgba_unmultiplied(255, 255, 255, 14)
+        },
+        Stroke::new(1.0, theme.glass_border_subtle),
+        StrokeKind::Inside,
+    );
+    painter.text(
+        plus_rect.center(),
+        egui::Align2::CENTER_CENTER,
+        "+",
+        FontId::proportional(15.0),
+        theme.accent,
+    );
+    if plus_resp.clicked() {
+        out.new_tab = true;
+    }
+
+    out
 }
 
 /// Non-intrusive notification bar for config hot-reload errors or confirmation toasts.
@@ -778,8 +918,11 @@ fn render_single_pane(
         .fonts_mut(|f| f.glyph_width(&mono_font, 'W'))
         .max(font_size * 0.58);
     let cell_h = (font_size * line_height).ceil().max(font_size + 2.0);
-    let term_cols = (inner.width() / char_w).floor().max(10.0) as usize;
-    let term_rows = (inner.height() / cell_h).floor().max(4.0) as usize;
+    // PTY geometry always matches the inset Alt Screen grid so entering/leaving a TUI never
+    // triggers a resize and full-screen TUIs never paint over the rounded card corners.
+    let grid_rect = alt_screen_grid_rect(inner);
+    let term_cols = (grid_rect.width() / char_w).floor().max(10.0) as usize;
+    let term_rows = (grid_rect.height() / cell_h).floor().max(4.0) as usize;
 
     let recent_history: Vec<String> = app
         .recent_history
@@ -1046,6 +1189,36 @@ fn render_welcome_empty_state(
         .rect_filled(strip_rect, CornerRadius::same(2), theme.accent);
 }
 
+/// Corner radius of the Alt Screen card (matches the mockup's 14px block cards).
+pub(crate) const ALT_SCREEN_RADIUS: u8 = 14;
+/// Inset between the Alt Screen card edge and the terminal cell grid. Large enough that the
+/// grid's corners lie inside the rounded arc of the card.
+pub(crate) const ALT_SCREEN_PADDING: f32 = 10.0;
+
+/// Terminal cell grid rect for an Alt Screen card occupying `card`.
+pub(crate) fn alt_screen_grid_rect(card: Rect) -> Rect {
+    let grid = card.shrink(ALT_SCREEN_PADDING);
+    if grid.is_positive() { grid } else { card }
+}
+
+/// Paints the rounded Alt Screen container: opaque terminal background, glass border and
+/// a top specular highlight.
+pub(crate) fn paint_alt_screen_card(painter: &egui::Painter, card: Rect, theme: &MaterialTheme) {
+    painter.rect(
+        card,
+        CornerRadius::same(ALT_SCREEN_RADIUS),
+        theme.background,
+        Stroke::new(1.0, theme.glass_border),
+        StrokeKind::Inside,
+    );
+    paint_specular_highlight(
+        painter,
+        card,
+        f32::from(ALT_SCREEN_RADIUS),
+        theme.glass_highlight,
+    );
+}
+
 #[allow(clippy::too_many_arguments)]
 fn render_alt_screen(
     ui: &mut Ui,
@@ -1058,17 +1231,23 @@ fn render_alt_screen(
     accepts_keyboard: bool,
 ) -> Vec<u8> {
     let _resp = ui.allocate_rect(rect, Sense::click());
-    let painter = ui.painter_at(rect);
-    painter.rect_filled(rect, CornerRadius::ZERO, theme.background);
+
+    // Rounded Liquid Glass card that hosts the full-screen TUI (vim, htop, agy, ...).
+    paint_alt_screen_card(ui.painter(), rect, theme);
+
+    // Cells are painted strictly inside the inset grid rect, so neither cell backgrounds
+    // nor the cursor can square off the rounded card corners.
+    let grid_rect = alt_screen_grid_rect(rect);
+    let painter = ui.painter_at(grid_rect);
 
     let grid = pane.engine.alt_screen();
     let (cursor_row, cursor_col) = grid.cursor();
-    let origin = rect.min;
+    let origin = grid_rect.min;
 
     for r in 0..grid.rows() {
         let row = grid.row_cells(r);
         let y = origin.y + (r as f32) * cell_h;
-        if y > rect.bottom() {
+        if y > grid_rect.bottom() {
             break;
         }
 
@@ -1215,6 +1394,155 @@ mod tests {
     use crate::config::AppConfig;
     use crate::ui::input_editor::InputEditorState;
     use egui::{Context, RawInput};
+
+    fn rect_shapes(out: &egui::FullOutput) -> Vec<(egui::epaint::RectShape, Rect)> {
+        out.shapes
+            .iter()
+            .filter_map(|c| match &c.shape {
+                egui::epaint::Shape::Rect(r) => Some((r.clone(), c.clip_rect)),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn tab_pills_are_fully_rounded_and_never_clipped_by_workspace_edge() {
+        let ctx = Context::default();
+        let cfg = AppConfig::default();
+        let theme = MaterialTheme::from_config(&cfg);
+        theme.apply_to_egui(&ctx, &cfg);
+
+        let bar_rect = Rect::from_min_size(Pos2::ZERO, Vec2::new(1160.0, 46.0));
+        let strip_rect = Rect::from_min_max(Pos2::new(80.0, 0.0), Pos2::new(760.0, 46.0));
+        let tabs = vec![
+            TabPillInfo {
+                title: "Material-Terminal".into(),
+                badge: "zsh".into(),
+                is_active: false,
+            },
+            TabPillInfo {
+                title: "▶ antigravity".into(),
+                badge: "zsh".into(),
+                is_active: true,
+            },
+            TabPillInfo {
+                title: "▶ a-really-long-running-interactive-cli-name".into(),
+                badge: "bash".into(),
+                is_active: false,
+            },
+        ];
+
+        let mut pill_rects = Vec::new();
+        let mut out = ctx.run_ui(
+            RawInput {
+                screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(1160.0, 760.0))),
+                ..Default::default()
+            },
+            |ui| {
+                ui.set_clip_rect(bar_rect);
+                pill_rects = render_tab_strip(ui, strip_rect, &tabs, &theme).pill_rects;
+            },
+        );
+        out.textures_delta.clear();
+
+        assert_eq!(pill_rects.len(), 3);
+        let shapes = rect_shapes(&out);
+        for pill in &pill_rects {
+            assert!(
+                pill.top() >= bar_rect.top() + 6.0 && pill.bottom() <= bar_rect.bottom() - 6.0,
+                "tab pill {pill:?} must keep >= 6px clearance inside the titlebar {bar_rect:?}"
+            );
+            assert!((pill.height() - TAB_PILL_HEIGHT).abs() < 0.5);
+            // Long running-command titles are ellipsized, keeping pills compact.
+            assert!(pill.width() < 260.0, "pill {pill:?} must stay compact");
+        }
+
+        // The active pill is painted as one rounded shape whose clip rect fully contains it
+        // (no flat/sliced bottom edge).
+        let active = pill_rects[1];
+        let (shape, clip) = shapes
+            .iter()
+            .find(|(r, _)| r.rect == active)
+            .expect("active tab pill must be painted as a rect shape");
+        assert_eq!(shape.corner_radius, CornerRadius::same(TAB_PILL_RADIUS));
+        assert!(
+            clip.contains_rect(active.expand(0.5)),
+            "active pill {active:?} must not be clipped (clip {clip:?})"
+        );
+
+        // No square (zero-radius) box is ever painted over any tab pill.
+        for (r, _) in &shapes {
+            if pill_rects.iter().any(|p| p.intersects(r.rect)) {
+                assert!(
+                    r.corner_radius != CornerRadius::ZERO,
+                    "square shape {:?} painted over a rounded tab pill",
+                    r.rect
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn alt_screen_card_is_rounded_and_grid_stays_inside_corners() {
+        let ctx = Context::default();
+        let cfg = AppConfig::default();
+        let theme = MaterialTheme::from_config(&cfg);
+        theme.apply_to_egui(&ctx, &cfg);
+
+        let card = Rect::from_min_size(Pos2::new(18.0, 58.0), Vec2::new(1124.0, 690.0));
+        let mut out = ctx.run_ui(
+            RawInput {
+                screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(1160.0, 760.0))),
+                ..Default::default()
+            },
+            |ui| {
+                paint_alt_screen_card(ui.painter(), card, &theme);
+            },
+        );
+        out.textures_delta.clear();
+
+        let shapes = rect_shapes(&out);
+        let (shape, _) = shapes
+            .iter()
+            .find(|(r, _)| r.rect == card)
+            .expect("alt screen card must be painted");
+        assert_eq!(shape.corner_radius, CornerRadius::same(ALT_SCREEN_RADIUS));
+        assert!(
+            shape.stroke.width > 0.0,
+            "alt screen card must have a glass border"
+        );
+
+        // Every corner of the cell grid lies inside the rounded arc of the card.
+        let grid = alt_screen_grid_rect(card);
+        assert!(card.contains_rect(grid));
+        let r = f32::from(ALT_SCREEN_RADIUS);
+        let arc_centers = [
+            Pos2::new(card.left() + r, card.top() + r),
+            Pos2::new(card.right() - r, card.top() + r),
+            Pos2::new(card.left() + r, card.bottom() - r),
+            Pos2::new(card.right() - r, card.bottom() - r),
+        ];
+        let grid_corners = [
+            grid.left_top(),
+            grid.right_top(),
+            grid.left_bottom(),
+            grid.right_bottom(),
+        ];
+        for (corner, center) in grid_corners.iter().zip(arc_centers) {
+            assert!(
+                corner.distance(center) <= r,
+                "grid corner {corner:?} must sit inside the rounded card corner"
+            );
+        }
+    }
+
+    #[test]
+    fn ellipsize_truncates_long_titles() {
+        assert_eq!(ellipsize("short", 24), "short");
+        let long = ellipsize("▶ a-really-long-running-interactive-cli-name", 24);
+        assert_eq!(long.chars().count(), 24);
+        assert!(long.ends_with('…'));
+    }
 
     #[test]
     fn split_rects_are_strictly_disjoint_for_both_axes() {
