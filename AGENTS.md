@@ -47,6 +47,10 @@ src/
    - Alternate screen (`CSI ?1049h` / `?1049l`) takes full pane viewport ownership for interactive TUIs (`vim`, `htop`, `less`) and cleanly restores block view upon exit.
 4. **Zero Telemetry:**
    - Never add network telemetry, analytics, or external reporting. All persistence stays under local OS config/data directories.
+5. **Simplicity & 400-Line File Limit:**
+   - Every Rust source file (`src/**/*.rs`) MUST stay at or below **400 lines**. Whenever a file exceeds 400 lines, decompose it into cohesive, single-responsibility submodules so the codebase remains simple, readable, and easy to navigate.
+6. **UI-Agnostic Core:**
+   - Core modules (`config`, `pty`, `terminal`, `blocks`, `history`, `spaces`, `agents`) MUST NOT depend on any specific UI framework (`egui` / `gpui`). UI adapters live strictly in the UI layer.
 
 ---
 
