@@ -4,13 +4,15 @@
 pub mod block_view;
 pub mod command_palette;
 pub mod input_editor;
+pub mod key_adapter;
 pub mod theme;
 
 use crate::app::{MaterialTerminalApp, PaneNode, PaneState, SplitAxis};
 use crate::blocks::CommandBlock;
-use crate::terminal::{TermColor, encode_egui_key};
+use crate::terminal::TermColor;
 use crate::ui::block_view::{BlockAction, render_block_card};
 use crate::ui::input_editor::{InputAction, compact_home_path};
+use crate::ui::key_adapter::encode_egui_key;
 use crate::ui::theme::{MaterialTheme, paint_specular_highlight, rgb_opaque};
 use egui::text::LayoutJob;
 use egui::{
